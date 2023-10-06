@@ -468,8 +468,8 @@ async def get_logs(request):
 def main():
     global room_controller, door_just_closed, active_key
     print("Start main function")
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGINT, signal_handler)
+    #signal.signal(signal.SIGTERM, signal_handler)
+    #signal.signal(signal.SIGINT, signal_handler)
 
     get_active_cards()
     card_task = CheckActiveCardsTask(interval=timedelta(seconds=system_config.new_key_check_interval),
@@ -515,5 +515,5 @@ async def on_startup():
     logging.basicConfig()
     print("Server started")
 
-thread = threading.Thread(target=main, kwargs={'debug': False})
+thread = threading.Thread(target=main)
 thread.start()

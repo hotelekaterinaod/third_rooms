@@ -437,7 +437,13 @@ def read_root():
 async def get_input():
     states = []
     for i in range(27):
-        states.append({"pin" + str(i): "state" + str(bool(room_controller[i].state))})
+        try:
+            states.append({"pin" + str(i): "state" + str(bool(room_controller[i].state))})
+        except KeyError:
+            pass
+        except IndexError:
+            pass
+
     return states
 
 @app.get('/logs/')

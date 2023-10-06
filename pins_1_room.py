@@ -10,6 +10,7 @@ import serial
 import RPi.GPIO as GPIO
 from retry import retry
 import logging
+import asyncio
 
 from pin_controller import PinController
 from relaycontroller import RelayController
@@ -464,7 +465,7 @@ async def get_logs(request):
         return {'error': 'Log file not found'}
 
 
-def main():
+async def main():
     global room_controller, door_just_closed, active_key
     print("Start main function")
     signal.signal(signal.SIGTERM, signal_handler)
@@ -508,5 +509,10 @@ def main():
             break
 
 
-logging.basicConfig()
-main()
+
+@app.on_event("startup")
+async def on_startup():
+    print("Starting server...")
+    logging.basicConfig()
+    await main()
+    print("Server started")

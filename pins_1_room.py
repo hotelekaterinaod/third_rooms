@@ -424,8 +424,13 @@ class CheckActiveCardsTask(threading.Thread):
 from typing import Union
 
 from fastapi import FastAPI
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/")
@@ -439,7 +444,6 @@ async def get_input():
     states = []
     for i in range(27):
         try:
-            breakpoint()
             states.append({"pin" + str(i): "state" + str(bool(room_controller[i].state))})
         except KeyError:
             pass
@@ -449,14 +453,16 @@ async def get_input():
     return states
 
 @app.get('/logs/')
-async def get_logs():
+async def get_logs(request):
     log_file = 'debug.log'  # Укажите имя вашего файла с логами
     try:
         with open(log_file, 'r') as f:
             logs = f.readlines()
-        return {'logs': logs}
+        return templates.TemplateResponse("index.html", {"request": request, "file_content": logs})
+
     except FileNotFoundError:
         return {'error': 'Log file not found'}
+
 
 def main():
     global room_controller, door_just_closed, active_key

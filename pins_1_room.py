@@ -437,7 +437,7 @@ def read_root():
 async def get_input():
     states = []
     for i in range(27):
-        states.append({"pin" + str(i): "state" + str(GPIO.input(i))})
+        states.append({"pin" + str(i): "state" + str(bool(room_controller[i].state))})
     return states
 
 @app.get('/logs/')

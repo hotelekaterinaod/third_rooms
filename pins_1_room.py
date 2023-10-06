@@ -446,20 +446,19 @@ async def get_input():
     for i in range(27):
         try:
             states.append({"pin" + str(i): "state" + str(bool(room_controller[i].state))})
-        except KeyError:
+        except Exception:
             pass
-        except IndexError:
-            pass
+
 
     return states
 
 @app.get('/logs/')
-async def get_logs(request):
+async def get_logs():
     log_file = 'debug.log'  # Укажите имя вашего файла с логами
     try:
         with open(log_file, 'r') as f:
             logs = f.readlines()
-        return templates.TemplateResponse("index.html", {"request": request, "file_content": logs})
+        return templates.TemplateResponse("index.html", { "file_content": logs})
 
     except FileNotFoundError:
         return {'error': 'Log file not found'}

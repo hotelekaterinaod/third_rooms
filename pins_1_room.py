@@ -515,5 +515,5 @@ async def on_startup():
     logging.basicConfig()
     print("Server started")
 
-thread = threading.Thread(target=main)
+thread = threading.Thread(target=main, kwargs={'debug': False})
 thread.start()

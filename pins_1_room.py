@@ -435,6 +435,7 @@ def read_root():
 
 @app.get('/get_input/')
 async def get_input():
+    global room_controller
     states = []
     for i in range(27):
         try:

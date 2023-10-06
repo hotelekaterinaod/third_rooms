@@ -466,7 +466,7 @@ async def get_logs(request):
 
 def main():
     global room_controller, door_just_closed, active_key
-
+    print("Start main function")
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -508,8 +508,5 @@ def main():
             break
 
 
-if __name__ == "__main__":
-    logging.basicConfig()
-
-
-    main()
+logging.basicConfig()
+main()

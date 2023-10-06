@@ -438,6 +438,7 @@ async def get_input():
     states = []
     for i in range(27):
         try:
+            breakpoint()
             states.append({"pin" + str(i): "state" + str(bool(room_controller[i].state))})
         except KeyError:
             pass

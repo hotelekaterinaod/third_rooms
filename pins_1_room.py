@@ -424,7 +424,7 @@ class CheckActiveCardsTask(threading.Thread):
 
 from typing import Union
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 
@@ -452,13 +452,16 @@ async def get_input():
 
     return states
 
+def get_request(request: Request):
+    return request
+
 @app.get('/logs/')
-async def get_logs():
+async def get_logs(request: Request = Depends(get_request)):
     log_file = 'debug.log'  # Укажите имя вашего файла с логами
     try:
         with open(log_file, 'r') as f:
             logs = f.readlines()
-        return templates.TemplateResponse("index.html", { "file_content": logs})
+        return templates.TemplateResponse("index.html", {'request': request, "file_content": logs})
 
     except FileNotFoundError:
         return {'error': 'Log file not found'}

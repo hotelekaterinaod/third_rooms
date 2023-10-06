@@ -452,11 +452,10 @@ async def get_input():
 
     return states
 
-def get_request(request: Request):
-    return request
+
 
 @app.get('/logs/')
-async def get_logs(request: Request = Depends(get_request)):
+async def get_logs(request: Request):
     log_file = 'debug.log'  # Укажите имя вашего файла с логами
     try:
         with open(log_file, 'r') as f:

@@ -445,7 +445,7 @@ async def get_input():
     states = []
     for i in range(27):
         try:
-            states.append({"pin" + str(i): "state" + str(bool(room_controller[i].state))})
+            states.append({"pin" + str(i): "state = " + str(bool(room_controller[i].state))})
         except Exception:
             pass
 
@@ -460,7 +460,8 @@ async def get_logs(request: Request):
     try:
         with open(log_file, 'r') as f:
             logs = f.readlines()
-        return templates.TemplateResponse("index.html", {'request': request, "file_content": logs})
+        reversed_list = logs[::-1]
+        return templates.TemplateResponse("index.html", {'request': request, "file_content": reversed_list})
 
     except FileNotFoundError:
         return {'error': 'Log file not found'}

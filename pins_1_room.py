@@ -431,7 +431,7 @@ from fastapi.staticfiles import StaticFiles
 app = FastAPI()
 templates = Jinja2Templates(directory="~/software/third_rooms/templates")
 
-app.mount("~/software/third_rooms/static", StaticFiles(directory="static"), name="static")
+app.mount("~/software/third_rooms/static", StaticFiles(directory="~/software/third_rooms/static"), name="static")
 
 
 @app.get("/")

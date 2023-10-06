@@ -465,7 +465,7 @@ async def get_logs(request):
         return {'error': 'Log file not found'}
 
 
-async def main():
+def main():
     global room_controller, door_just_closed, active_key
     print("Start main function")
     signal.signal(signal.SIGTERM, signal_handler)
@@ -509,10 +509,11 @@ async def main():
             break
 
 
-
 @app.on_event("startup")
 async def on_startup():
     print("Starting server...")
     logging.basicConfig()
-    await main()
     print("Server started")
+
+thread = threading.Thread(target=main)
+thread.start()

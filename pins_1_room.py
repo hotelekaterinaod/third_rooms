@@ -261,7 +261,7 @@ def wait_rfid():
 @retry(tries=3, delay=5)
 def check_pins():
     global room_controller
-    pin_list_for_check = [18, 40]
+    pin_list_for_check = [21, 24]
     for item in pin_list_for_check:
         room_controller[item].check_pin()
     state_message = "Pin state : "

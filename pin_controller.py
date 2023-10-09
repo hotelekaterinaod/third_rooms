@@ -28,6 +28,7 @@ class PinController:
 
     def check_pin(self):
         self.handler("Check for {pin} pin".format(pin=self.pin))
+        logger.info("Check for {pin} pin".format(pin=self.pin))
 
     def handler(self, message):
         time.sleep(0.01)
@@ -40,6 +41,7 @@ class PinController:
                 self.callback(self)
 
     def gpio_wrapper(self, pin):
+        logger.info("Callback handler for pin {pin}".format(pin=pin))
         self.handler("Callback handler for pin {pin}".format(pin=pin))
 
     def __init__(self, pin, callback, up_down=GPIO.PUD_UP, react_on=GPIO.BOTH, before_callback=None, bouncetime=100):

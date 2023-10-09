@@ -3,8 +3,8 @@
 
   "db_config": {
     "server": "192.168.9.241",
-    "user": "sa",
-    "password": "P2ssw0rd",
+    "user": "user",
+    "password": "123",
     "database": "kluch"
   },
 

@@ -10,7 +10,6 @@ import serial
 import RPi.GPIO as GPIO
 from retry import retry
 import logging
-import asyncio
 
 from pin_controller import PinController
 from relaycontroller import RelayController
@@ -62,7 +61,6 @@ data2 = bus.read_byte(0x39)
 logger.info(str(bin(data1) + " " + bin(data2)))
 
 active_cards = {}
-logs = {}
 active_key = None
 
 GPIO.setmode(GPIO.BCM)
@@ -126,29 +124,6 @@ def f_safe(self):
     pass
 
 
-# GPIO_25 callback датчик дыма 1
-def f_fire_detector1(self):
-    logger.info("Fire detector 1")
-    pass
-
-
-# GPIO_19 callback датчик дыма 2
-def f_fire_detector2(self):
-    logger.info("Fire detector 2")
-    pass
-
-
-# GPIO_26 callback датчик дыма 3
-def f_fire_detector3(self):
-    logger.info("Fire detector 3")
-    pass
-
-
-# GPIO_8 callback датчик дыма 4
-def f_fire_detector4(self):
-    logger.info("Fire detector 4")
-    pass
-
 
 # GPIO_22 callback картоприемник
 def f_card_key(self):
@@ -159,65 +134,6 @@ def f_card_key(self):
 # GPIO_27 callback цепь автоматов
 def f_circuit_breaker(self):
     logger.info("Curcuit breaker")
-    pass
-
-
-# GPIO_17 callback контроль наличия питания R3 (освещения)
-def f_energy_sensor(self):
-    logger.info("Energy sensor work")
-
-
-# GPIO_20 callback окно1 (балкон)
-def f_window1(self):
-    logger.info("window 1")
-
-
-# GPIO_07 callback окно2
-def f_window2(self):
-    logger.info("window 2")
-
-
-# GPIO_13 callback окно3
-def f_window3(self):
-    logger.info("window 3")
-
-
-# GPIO_16 callback выключатель основного света спальня1
-def f_switch_main(self):
-    global lighting_main
-    if not lighting_main:
-        relay2_controller.clear_bit(0)
-        lighting_main = True
-    else:
-        relay2_controller.set_bit(0)
-        lighting_main = False
-
-
-# GPIO_12 callback выключатель бра левый спальня1
-def f_switch_bl(self):
-    global lighting_bl
-    if not lighting_bl:
-        relay1_controller.clear_bit(6)
-        lighting_bl = True
-    else:
-        relay1_controller.set_bit(6)
-        lighting_bl = False
-
-
-# GPIO_01 callback выключатель бра правый спальня1
-def f_switch_br(self):
-    global lighting_br
-    if not lighting_br:
-        relay1_controller.clear_bit(7)
-        lighting_br = True
-    else:
-        relay1_controller.set_bit(7)
-        lighting_br = False
-
-
-# GPIO_21 callback датчик затопления ВЩ
-def f_flooding_sensor(self):
-    logger.info("flooding_sensor")
     pass
 
 
@@ -232,37 +148,38 @@ def init_room():
     logger.info("Init room")
     pin_structure = {
         0: None,
-        1: PinController(1, f_switch_br, react_on=GPIO.FALLING, bouncetime=200),
+        1: None,
+        #1: PinController(1, f_switch_br, react_on=GPIO.FALLING, bouncetime=200),
         # кнопка-выключатель бра правый спальня1,
         2: None,
         3: None,
         5: None,
         6: None,
-        7: PinController(7, f_window2),  # (окно2)
-        8: PinController(8, f_fire_detector4),  # датчик дыма 4,
+        7: None,  # (окно2)
+        8: None,  # датчик дыма 4,
         9: None,
-        10: PinController(10, f_safe, react_on=GPIO.FALLING),  # (сейф),
+        10: None,
         11: None,  # кнопка-выключатель бра правый спальня2,
-        12: PinController(12, f_switch_bl, react_on=GPIO.FALLING, bouncetime=200),
+        12: None,
         # кнопка-выключатель бра левый спальня1
-        13: PinController(13, f_window3),  # (окно3)
+        13: None,  # (окно3)
         14: None,
         15: None,
-        16: PinController(16, f_switch_main, react_on=GPIO.FALLING, bouncetime=200),
+        16: None,
         # кнопка-выключатель основного света спальня1
-        17: PinController(17, f_energy_sensor, up_down=GPIO.PUD_DOWN, react_on=GPIO.RISING),
+        17: None,
         # (контроль наличия питания R3 (освещения))
         18: PinController(18, f_using_key),  # (открытие замка механическим ключем)
-        19: PinController(19, f_fire_detector2),  # (датчик дыма 2)
-        20: PinController(20, f_window1),  # (окно1-балкон)
-        21: PinController(21, f_flooding_sensor),  # (датчик затопления ВЩ)
+        19: None,  # (датчик дыма 2)
+        20: None,  # (окно1-балкон)
+        21: None,  # (датчик затопления ВЩ)
         22: PinController(22, f_card_key),  # картоприемник
         23: PinController(23, f_lock_door_from_inside, before_callback=f_before_lock_door_from_inside),
         # замок "запрет"
         24: PinController(24, f_lock_latch),  # замок сработка "язычка"
-        25: PinController(25, f_fire_detector1),  # датчик дыма 1
-        26: PinController(26, f_fire_detector3),  # датчик дыма 3
-        27: PinController(27, f_circuit_breaker, up_down=GPIO.PUD_DOWN, react_on=GPIO.RISING),
+        25: None,  # датчик дыма 1
+        26: None,  # датчик дыма 3
+        27: None,
         # (цепь допконтактов автоматов)
     }
 
@@ -284,8 +201,7 @@ def get_card_role(card):
 @retry(tries=10, delay=1)
 def permit_open_door():
     global door_just_closed, can_open_the_door, active_key
-    card_role = get_card_role(active_key)
-    if is_door_locked_from_inside() or card_role == "Admin":
+    if is_door_locked_from_inside():
         logger.info("The door has been locked by the guest.")
         for i in range(10):
             relay2_controller.set_bit(4)
@@ -346,13 +262,13 @@ def get_active_cards():
     # key_list = [(301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 2, 18, 14, 33, 25), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 8, 24, 10, 43, 18), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 8, 24, 10, 43, 22), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 8, 24, 12, 16, 44), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 8, 24, 11, 55, 42), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2023, 5, 24, 14, 31, 51), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2023, 5, 24, 14, 31, 53), None, 1), (301, '21 00 36 BD A2                  ', datetime.datetime(2023, 6, 6, 21, 0), datetime.datetime(2025, 6, 19, 0, 0), True, 26, datetime.datetime(2023, 6, 30, 13, 9, 57), None, 1), (301, '21 00 37 C9 F5                  ', datetime.datetime(2023, 7, 31, 21, 0), datetime.datetime(2024, 8, 3, 0, 0), True, 3, datetime.datetime(2023, 8, 3, 11, 51, 44), None, 1), (301, '21 00 37 C9 F5                  ', datetime.datetime(2023, 7, 31, 21, 0), datetime.datetime(2024, 8, 3, 0, 0), True, 3, datetime.datetime(2023, 8, 3, 11, 51, 47), None, 1), (301, '21 00 37 C9 F5                  ', datetime.datetime(2023, 7, 31, 21, 0), datetime.datetime(2024, 8, 3, 0, 0), True, 0, datetime.datetime(2023, 8, 3, 11, 48, 27), None, 1), (301, '21 00 37 C9 F5                  ', datetime.datetime(2023, 7, 31, 21, 0), datetime.datetime(2024, 8, 3, 0, 0), True, 2, datetime.datetime(2023, 8, 3, 11, 48, 50), None, 1)]
     active_cards = {handle_table_row(key): key for key in key_list}
 
-    if count_keys != len(key_list):
-        sql_update = "UPDATE table_kluch SET rpi = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
-                     "room_number}".format(now=now, room_number=system_config.room_number)
-        cursor.execute(sql_update)
-        get_db_connection().commit()
-        count_keys = len(key_list)
-        logger.info("Success update rpi field for new keys")
+    # if count_keys != len(key_list):
+    #     sql_update = "UPDATE table_kluch SET rpi = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
+    #                  "room_number}".format(now=now, room_number=system_config.room_number)
+    #     cursor.execute(sql_update)
+    #     get_db_connection().commit()
+    #     count_keys = len(key_list)
+    #     logger.info("Success update rpi field for new keys")
 
 
 @retry(tries=10, delay=1)
@@ -422,56 +338,10 @@ class CheckActiveCardsTask(threading.Thread):
             self.execute(*self.args, **self.kwargs)
 
 
-from typing import Union
-
-from fastapi import FastAPI, Depends, Request
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
-
-app = FastAPI()
-templates = Jinja2Templates(directory="/home/pi/software/third_rooms/templates")
-
-app.mount("/static", StaticFiles(directory="/home/pi/software/third_rooms/static"), name="static")
-
-
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
-
-@app.get('/get_input/')
-async def get_input():
-    global room_controller
-    states = []
-    for i in range(27):
-        try:
-            states.append({"pin" + str(i): "state = " + str(bool(room_controller[i].state))})
-        except Exception:
-            pass
-
-
-    return states
-
-
-
-@app.get('/logs/')
-async def get_logs(request: Request):
-    log_file = 'debug.log'  # Укажите имя вашего файла с логами
-    try:
-        with open(log_file, 'r') as f:
-            logs = f.readlines()
-        reversed_list = logs[::-1]
-        return templates.TemplateResponse("index.html", {'request': request, "file_content": reversed_list})
-
-    except FileNotFoundError:
-        return {'error': 'Log file not found'}
-
-
 def main():
     global room_controller, door_just_closed, active_key
-    print("Start main function")
-    #signal.signal(signal.SIGTERM, signal_handler)
-    #signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
 
     get_active_cards()
     card_task = CheckActiveCardsTask(interval=timedelta(seconds=system_config.new_key_check_interval),
@@ -490,7 +360,7 @@ def main():
             door_just_closed = False
             entered_key = wait_rfid()
             if entered_key in list(active_cards.keys()):
-                # TODO Refactor getting key from DB
+                # TODO Refactor getting key
                 active_key = active_cards[entered_key]
                 logger.info("Correct key! Please enter!")
                 permit_open_door()
@@ -511,11 +381,6 @@ def main():
             break
 
 
-@app.on_event("startup")
-async def on_startup():
-    print("Starting server...")
+if __name__ == "__main__":
     logging.basicConfig()
-    print("Server started")
-
-thread = threading.Thread(target=main)
-thread.start()
+    main()

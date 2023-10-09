@@ -234,7 +234,7 @@ def get_active_cards():
     cursor.execute(sql)
     key_list = cursor.fetchall()
     active_cards = {handle_table_row(key): key for key in key_list}
-
+    print(f"Active cards: {active_cards}")
     # if count_keys != len(key_list):
     #     sql_update = "UPDATE table_kluch SET rpi = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
     #                  "room_number}".format(now=now, room_number=system_config.room_number)
@@ -251,6 +251,7 @@ def wait_rfid():
     read_byte = (rfid_port.read(system_config.rfid_key_length)[1:11])
     key_ = read_byte.decode("utf-8")
     rfid_port.close()
+    print(read_byte)
     if key_:
         logger.info("key catched {key} {datetime}".format(key=key_, datetime=datetime.utcnow()))
         return key_
@@ -332,6 +333,7 @@ def main():
             logger.info("Waiting for the key")
             door_just_closed = False
             entered_key = wait_rfid()
+            print("Entered key: {entered_key}".format(entered_key=entered_key))
             if entered_key in list(active_cards.keys()):
                 active_key = active_cards[entered_key]
                 logger.info("Correct key! Please enter!")

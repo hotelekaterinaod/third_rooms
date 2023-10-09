@@ -1,4 +1,5 @@
 import smbus
+from config import logger
 
 
 class RelayController:
@@ -17,9 +18,9 @@ class RelayController:
         self.__bus.write_byte_data(self.__address, 0x09, self.__state)
 
     def set_bit(self, bit):
-        print(f"Set {self.__address} -  {self.__state}")
+        logger.info(f"Before for {self.__address} - state  {self.__state}")
         self.__state |= 1 << bit
-        print(f"Set 2 {self.__state}")
+        logger.info(f"Set after state {self.__state}")
         self.__bus.write_byte_data(self.__address, 0x09, self.__state)
 
     def toggle_bit(self, bit):

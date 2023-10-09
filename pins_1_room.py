@@ -378,7 +378,7 @@ def check_pins():
     state_message = "Pin state : "
     for item in pin_list_for_check:
         state_message += "pin#{pin}:{state}, ".format(pin=room_controller[item].pin, state=room_controller[item].state)
-    print(state_message)
+    logger.info(state_message)
 
 
 def signal_handler(signum, frame):

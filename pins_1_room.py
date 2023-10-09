@@ -34,31 +34,17 @@ bus = smbus.SMBus(1)
 
 # адреса контроллеров
 relay1_controller = RelayController(0x38)
-relay2_controller = RelayController(0x39)
 
 # соответствие портов контроллеров
 relay1_controller.set_bit(0)  # открыть замок
 relay1_controller.set_bit(1)  # закрыть замок
-relay1_controller.set_bit(2)  # аварийное освещение
-relay1_controller.set_bit(3)  # соленоиды
-relay1_controller.clear_bit(4)  # R2
-relay1_controller.clear_bit(5)  # R3
-relay1_controller.set_bit(6)  # бра левый
-relay1_controller.set_bit(7)  # бра правый
+relay1_controller.set_bit(2)  # кнопка внутреннего открытия
 
-relay2_controller.set_bit(0)  # свет спальня
-relay2_controller.set_bit(1)  # кондиционеры
-relay2_controller.set_bit(2)  # радиатор1
-relay2_controller.set_bit(3)  # радиатор2
-relay2_controller.clear_bit(4)  # зеленый
-relay2_controller.clear_bit(5)  # синий
-relay2_controller.clear_bit(6)  # красный
-relay2_controller.set_bit(7)  # свет спальня спальня2
 
 data1 = bus.read_byte(0x38)
-data2 = bus.read_byte(0x39)
 
-logger.info(str(bin(data1) + " " + bin(data2)))
+
+logger.info(str(bin(data1)))
 
 active_cards = {}
 active_key = None
@@ -73,75 +59,78 @@ class ProgramKilled(Exception):
     pass
 
 
-def f_lock_door_from_inside(self):
-    # logger.info(f"OFFF {bool(room_controller[23].state)}")
-    if bool(room_controller[23].state):
-        relay2_controller.clear_bit(6)  # 6
+# def f_lock_door_from_inside(self):
+#     # logger.info(f"OFFF {bool(room_controller[23].state)}")
+#     if bool(room_controller[23].state):
+#         relay2_controller.clear_bit(6)  # 6
 
 
 # GPIO_23 callback (проверка сработки внут защелки (ригеля) на закрытие)
-def f_lock_door_from_inside_thread():
-    while not bool(room_controller[23].state):
-        relay2_controller.set_bit(6)  # 6
-        time.sleep(0.2)
-        relay2_controller.clear_bit(6)  # 6
-        time.sleep(0.2)
+# def f_lock_door_from_inside_thread():
+#     while not bool(room_controller[23].state):
+#         relay2_controller.set_bit(6)  # 6
+#         time.sleep(0.2)
+#         relay2_controller.clear_bit(6)  # 6
+#         time.sleep(0.2)
 
 
-def f_open_door_indicates_thread():
-    for i in range(12):
-        relay2_controller.set_bit(4)  # 6
-        time.sleep(0.2)
-        relay2_controller.clear_bit(4)  # 6
-        time.sleep(0.2)
+# def f_open_door_indicates_thread():
+#     for i in range(12):
+#         relay2_controller.set_bit(4)  # 6
+#         time.sleep(0.2)
+#         relay2_controller.clear_bit(4)  # 6
+#         time.sleep(0.2)
 
 
-def f_before_lock_door_from_inside(self):
-    global close_door_from_inside
-    time.sleep(0.01)
-    thread_time = threading.Thread(target=f_lock_door_from_inside_thread)
-    thread_time.start()
-    if self.state:
-        thread_time.join()
-        relay2_controller.clear_bit(6)  # тушим красный светодиод
+# def f_before_lock_door_from_inside(self):
+#     global close_door_from_inside
+#     time.sleep(0.01)
+#     thread_time = threading.Thread(target=f_lock_door_from_inside_thread)
+#     thread_time.start()
+#     if self.state:
+#         thread_time.join()
+#         relay2_controller.clear_bit(6)  # тушим красный светодиод
 
 
 # GPIO_24 callback (проверка сработки "язычка" на открытие)
-def f_lock_latch(self):
-    time.sleep(1)
-    logger.info("Lock latch")
-    # close_door()
+# def f_lock_latch(self):
+#     time.sleep(1)
+#     logger.info("Lock latch")
+#     # close_door()
 
 
 # GPIO_18 callback (использование ключа)
 def f_using_key(self):
     logger.info("Use key")
 
+def f_using_key2(self):
+    logger.info("Use key2")
+
 
 # GPIO_10 callback (сейф)
-def f_safe(self):
-    logger.info("Safe")
-    pass
-
-
-
-# GPIO_22 callback картоприемник
-def f_card_key(self):
-    logger.info("Card")
-    pass
+# def f_safe(self):
+#     logger.info("Safe")
+#     pass
+#
+#
+#
+# # GPIO_22 callback картоприемник
+# def f_card_key(self):
+#     logger.info("Card")
+#     pass
 
 
 # GPIO_27 callback цепь автоматов
-def f_circuit_breaker(self):
-    logger.info("Curcuit breaker")
-    pass
+# def f_circuit_breaker(self):
+#     logger.info("Curcuit breaker")
+#     pass
 
 
-def is_door_locked_from_inside():
-    global room_controller
-    time.sleep(0.1)
-    logger.info(f"Is door locked {not bool(room_controller[23].state)}")
-    return not bool(room_controller[23].state)
+# def is_door_locked_from_inside():
+#     global room_controller
+#     time.sleep(0.1)
+#     logger.info(f"Is door locked {not bool(room_controller[23].state)}")
+#     return not bool(room_controller[23].state)
 
 
 def init_room():
@@ -173,13 +162,14 @@ def init_room():
         19: None,  # (датчик дыма 2)
         20: None,  # (окно1-балкон)
         21: None,  # (датчик затопления ВЩ)
-        22: PinController(22, f_card_key),  # картоприемник
-        23: PinController(23, f_lock_door_from_inside, before_callback=f_before_lock_door_from_inside),
+        22: None,
+        23: None,
         # замок "запрет"
-        24: PinController(24, f_lock_latch),  # замок сработка "язычка"
+        24: None,
         25: None,  # датчик дыма 1
         26: None,  # датчик дыма 3
         27: None,
+        40: PinController(18, f_using_key2),
         # (цепь допконтактов автоматов)
     }
 
@@ -188,54 +178,39 @@ def init_room():
     return pin_structure
 
 
-def get_card_role(card):
-    global active_cards
-    # TODO Change index
-    if card:
-        return card[3]
-    else:
-        return None
+
 
 
 # открытие замка с предварительной проверкой положения pin23(защелка, запрет) и последующим закрытием по таймауту
 @retry(tries=10, delay=1)
 def permit_open_door():
     global door_just_closed, can_open_the_door, active_key
-    if is_door_locked_from_inside():
-        logger.info("The door has been locked by the guest.")
-        for i in range(10):
-            relay2_controller.set_bit(4)
-            time.sleep(0.2)
-            relay2_controller.clear_bit(4)
-            time.sleep(0.2)
-    else:
-        can_open_the_door = True
-        thread_time = threading.Thread(target=f_open_door_indicates_thread)
-        thread_time.start()
+    # if is_door_locked_from_inside():
+    #     logger.info("The door has been locked by the guest.")
+    #     for i in range(10):
+    #         relay2_controller.set_bit(4)
+    #         time.sleep(0.2)
+    #         relay2_controller.clear_bit(4)
+    #         time.sleep(0.2)
 
-        relay1_controller.clear_bit(1)
-        time.sleep(0.115)
-        relay1_controller.set_bit(1)
-        time.sleep(4.25)
-        close_door(thread_time)
+
+    relay1_controller.clear_bit(1)
+    time.sleep(0.115)
+    relay1_controller.set_bit(1)
+    time.sleep(4.25)
+    close_door()
 
 
 # закрытие замка, с предварительной проверкой
 @retry(tries=10, delay=1)
 def close_door(thread_time=None):
     global door_just_closed, can_open_the_door
-    if not can_open_the_door:
-        logger.info("Door is closed. Permission denied!")  # ????
-        return
-    can_open_the_door = False
-    door_just_closed = True
+
+
     time.sleep(0.1)
     relay1_controller.clear_bit(0)
     time.sleep(0.115)
     relay1_controller.set_bit(0)
-    if thread_time:
-        thread_time.join()
-    relay2_controller.clear_bit(4)
     logger.info("Client has been entered!")
 
 
@@ -288,7 +263,7 @@ def wait_rfid():
 @retry(tries=3, delay=5)
 def check_pins():
     global room_controller
-    pin_list_for_check = [1, 7, 8, 10, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+    pin_list_for_check = [18, 40]
     for item in pin_list_for_check:
         room_controller[item].check_pin()
     state_message = "Pin state : "
@@ -367,11 +342,7 @@ def main():
 
             else:
                 logger.info("Unknown key!")
-                for i in range(15):
-                    relay2_controller.set_bit(6)
-                    time.sleep(0.1)
-                    relay2_controller.clear_bit(6)
-                    time.sleep(0.1)
+
                 # if is_door_locked_from_inside():
                 #     relay2_controller.clear_bit(4)
         except ProgramKilled:

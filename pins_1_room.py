@@ -169,7 +169,7 @@ def init_room():
         25: None,  # датчик дыма 1
         26: None,  # датчик дыма 3
         27: None,
-        40: PinController(18, f_using_key2),
+        40: PinController(40, f_using_key2),
         # (цепь допконтактов автоматов)
     }
 

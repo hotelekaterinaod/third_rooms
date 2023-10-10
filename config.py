@@ -3,7 +3,7 @@ import logging
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
-logging.basicConfig(filename='debug.log', format=FORMAT)
+logging.basicConfig(filename='/home/admin/sowtfare/third_rooms/debug.log', format=FORMAT)
 logger = logging.getLogger("main")
 
 logger.setLevel(level=logging.DEBUG)
@@ -34,7 +34,7 @@ class DBConfig:
 class Config:
 
     def __init__(self):
-        with open("config.json") as cf:
+        with open("/home/admin/sowtfare/third_rooms/config.json") as cf:
             config_data = json.loads(cf.read())
         self.room_number = config_data["room_number"]
         self.db_config = DBConfig(config_data["db_config"])

@@ -250,10 +250,12 @@ def get_active_cards():
 def wait_rfid():
     logger.info("Search key")
     rfid_port = serial.Serial('/dev/ttyS0', 9600)
+    print(rfid_port)
     read_byte = (rfid_port.read(system_config.rfid_key_length)[1:11])
+    print(read_byte)
     key_ = read_byte.decode("utf-8")
     rfid_port.close()
-    print(read_byte)
+    print(key_)
     if key_:
         logger.info("key catched {key} {datetime}".format(key=key_, datetime=datetime.utcnow()))
         return key_
@@ -334,11 +336,9 @@ def main():
         try:
             logger.info("Waiting for the key")
             door_just_closed = False
-            try:
-                entered_key = wait_rfid()
-            except Exception as e:
-                print(e)
-                entered_key = None
+
+            entered_key = wait_rfid()
+
 
             print("Entered key: {entered_key}".format(entered_key=entered_key))
             if entered_key in list(active_cards.keys()):

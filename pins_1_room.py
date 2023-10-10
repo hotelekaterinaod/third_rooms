@@ -20,13 +20,6 @@ can_open_the_door = False
 close_door_from_inside = False
 count_keys = 0
 room_controller = {}
-lighting_main = False  # переменная состояния основного света спальня1
-lighting_bl = False  # переменная состояния бра левый спальня1
-lighting_br = False  # переменная состояния бра правый спальня1
-
-lighting_main2 = False  # переменная состояния основного света спальня2
-lighting_bl2 = False  # переменная состояния бра левый спальня2
-lighting_br2 = False  # переменная состояния бра правый спальня2
 
 db_connection = None
 
@@ -59,87 +52,27 @@ class ProgramKilled(Exception):
     pass
 
 
-# def f_lock_door_from_inside(self):
-#     # logger.info(f"OFFF {bool(room_controller[23].state)}")
-#     if bool(room_controller[23].state):
-#         relay2_controller.clear_bit(6)  # 6
-
-
-# GPIO_23 callback (проверка сработки внут защелки (ригеля) на закрытие)
-# def f_lock_door_from_inside_thread():
-#     while not bool(room_controller[23].state):
-#         relay2_controller.set_bit(6)  # 6
-#         time.sleep(0.2)
-#         relay2_controller.clear_bit(6)  # 6
-#         time.sleep(0.2)
-
-
-# def f_open_door_indicates_thread():
-#     for i in range(12):
-#         relay2_controller.set_bit(4)  # 6
-#         time.sleep(0.2)
-#         relay2_controller.clear_bit(4)  # 6
-#         time.sleep(0.2)
-
-
-# def f_before_lock_door_from_inside(self):
-#     global close_door_from_inside
-#     time.sleep(0.01)
-#     thread_time = threading.Thread(target=f_lock_door_from_inside_thread)
-#     thread_time.start()
-#     if self.state:
-#         thread_time.join()
-#         relay2_controller.clear_bit(6)  # тушим красный светодиод
-
-
-# GPIO_24 callback (проверка сработки "язычка" на открытие)
-# def f_lock_latch(self):
-#     time.sleep(1)
-#     logger.info("Lock latch")
-#     # close_door()
-
-
-# GPIO_18 callback (использование ключа)
-def f_using_key(self):
-    logger.info("Use key")
+# GPIO_18 callback (использование кнопок)
+def f_using_keys(self):
+    logger.info("Use keys")
     permit_open_door()
+    # relay1_controller.clear_bit(2)
+    # time.sleep(0.2)
+    # relay1_controller.set_bit(2)
 
-def f_using_key2(self):
+def f_using_homephone(self):
     logger.info("Use key2")
     permit_open_door()
-
-
-# GPIO_10 callback (сейф)
-# def f_safe(self):
-#     logger.info("Safe")
-#     pass
-#
-#
-#
-# # GPIO_22 callback картоприемник
-# def f_card_key(self):
-#     logger.info("Card")
-#     pass
-
-
-# GPIO_27 callback цепь автоматов
-# def f_circuit_breaker(self):
-#     logger.info("Curcuit breaker")
-#     pass
-
-
-# def is_door_locked_from_inside():
-#     global room_controller
-#     time.sleep(0.1)
-#     logger.info(f"Is door locked {not bool(room_controller[23].state)}")
-#     return not bool(room_controller[23].state)
+    # relay1_controller.clear_bit(2)
+    # time.sleep(0.2)
+    # relay1_controller.set_bit(2)
 
 
 def init_room():
     logger.info("Init room")
     pin_structure = {
-        24: PinController(24, f_using_key),  # (открытие замка механическим ключем)
-        21: PinController(21, f_using_key2)
+        24: PinController(24, f_using_keys),  # (открытие замка механическим ключем)
+        21: PinController(21, f_using_homephone)
     }
 
     global bus
@@ -153,15 +86,6 @@ def init_room():
 # открытие замка с предварительной проверкой положения pin23(защелка, запрет) и последующим закрытием по таймауту
 @retry(tries=10, delay=1)
 def permit_open_door():
-    global door_just_closed, can_open_the_door, active_key
-    # if is_door_locked_from_inside():
-    #     logger.info("The door has been locked by the guest.")
-    #     for i in range(10):
-    #         relay2_controller.set_bit(4)
-    #         time.sleep(0.2)
-    #         relay2_controller.clear_bit(4)
-    #         time.sleep(0.2)
-
     relay1_controller.clear_bit(2)
     time.sleep(0.2)
     relay1_controller.set_bit(2)
@@ -176,14 +100,11 @@ def permit_open_door():
 # закрытие замка, с предварительной проверкой
 @retry(tries=10, delay=1)
 def close_door(thread_time=None):
-    global door_just_closed, can_open_the_door
-
-
     time.sleep(0.1)
     relay1_controller.clear_bit(1)
     time.sleep(0.115)
     relay1_controller.set_bit(1)
-    logger.info("Client has been entered!")
+    logger.info("Someone has been entered!")
 
 
 def handle_table_row(row_):
@@ -322,8 +243,6 @@ def main():
             else:
                 logger.info("Unknown key!")
 
-                # if is_door_locked_from_inside():
-                #     relay2_controller.clear_bit(4)
         except ProgramKilled:
             logger.info("Program killed: running cleanup code")
             card_task.stop()

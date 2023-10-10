@@ -102,9 +102,11 @@ class ProgramKilled(Exception):
 # GPIO_18 callback (использование ключа)
 def f_using_key(self):
     logger.info("Use key")
+    relay1_controller.clear_bit(2)
 
 def f_using_key2(self):
     logger.info("Use key2")
+    relay1_controller.clear_bit(2)
 
 
 # GPIO_10 callback (сейф)

@@ -232,6 +232,7 @@ def wait_rfid():
             logger.info(f"No key {key_}")
     except Exception as e:
         print(f"Error in rfid {e}")
+        pass
 
 
 

@@ -236,14 +236,14 @@ def get_active_cards():
     cursor.execute(sql)
     key_list = cursor.fetchall()
     active_cards = {handle_table_row(key): key for key in key_list}
-    print(f"Active cards: {active_cards}")
-    # if count_keys != len(key_list):
-    #     sql_update = "UPDATE table_kluch SET rpi = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
-    #                  "room_number}".format(now=now, room_number=system_config.room_number)
-    #     cursor.execute(sql_update)
-    #     get_db_connection().commit()
-    #     count_keys = len(key_list)
-    #     logger.info("Success update rpi field for new keys")
+
+    if count_keys != len(key_list):
+        sql_update = "UPDATE table_kluch SET rpi = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
+                     "room_number}".format(now=now, room_number=system_config.room_number)
+        cursor.execute(sql_update)
+        get_db_connection().commit()
+        count_keys = len(key_list)
+        logger.info("Success update rpi field for new keys")
 
 
 @retry(tries=10, delay=1)

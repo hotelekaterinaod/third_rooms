@@ -195,9 +195,9 @@ def permit_open_door():
     #         time.sleep(0.2)
 
 
-    relay1_controller.clear_bit(1)
+    relay1_controller.clear_bit(0)
     time.sleep(0.115)
-    relay1_controller.set_bit(1)
+    relay1_controller.set_bit(0)
     time.sleep(4.25)
     close_door()
 
@@ -209,9 +209,9 @@ def close_door(thread_time=None):
 
 
     time.sleep(0.1)
-    relay1_controller.clear_bit(0)
+    relay1_controller.clear_bit(1)
     time.sleep(0.115)
-    relay1_controller.set_bit(0)
+    relay1_controller.set_bit(1)
     logger.info("Client has been entered!")
 
 

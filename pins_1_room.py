@@ -334,7 +334,12 @@ def main():
         try:
             logger.info("Waiting for the key")
             door_just_closed = False
-            entered_key = wait_rfid()
+            try:
+                entered_key = wait_rfid()
+            except Exception as e:
+                print(e)
+                entered_key = None
+
             print("Entered key: {entered_key}".format(entered_key=entered_key))
             if entered_key in list(active_cards.keys()):
                 active_key = active_cards[entered_key]

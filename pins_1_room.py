@@ -163,6 +163,7 @@ def permit_open_door():
     #         time.sleep(0.2)
 
     relay1_controller.clear_bit(2)
+    time.sleep(0.1)
     relay1_controller.set_bit(2)
     relay1_controller.clear_bit(0)
     time.sleep(0.2)

@@ -138,40 +138,8 @@ def f_using_key2(self):
 def init_room():
     logger.info("Init room")
     pin_structure = {
-        0: None,
-        1: None,
-        #1: PinController(1, f_switch_br, react_on=GPIO.FALLING, bouncetime=200),
-        # кнопка-выключатель бра правый спальня1,
-        2: None,
-        3: None,
-        5: None,
-        6: None,
-        7: None,  # (окно2)
-        8: None,  # датчик дыма 4,
-        9: None,
-        10: None,
-        11: None,  # кнопка-выключатель бра правый спальня2,
-        12: None,
-        # кнопка-выключатель бра левый спальня1
-        13: None,  # (окно3)
-        14: None,
-        15: None,
-        16: None,
-        # кнопка-выключатель основного света спальня1
-        17: None,
-        # (контроль наличия питания R3 (освещения))
         24: PinController(24, f_using_key),  # (открытие замка механическим ключем)
-        19: None,  # (датчик дыма 2)
-        20: None,  # (окно1-балкон)
-
-        22: None,
-        23: None,
-        # замок "запрет"
-        25: None,  # датчик дыма 1
-        26: None,  # датчик дыма 3
-        27: None,
-        21: PinController(21, f_using_key2),
-        # (цепь допконтактов автоматов)
+        21: PinController(21, f_using_key2)
     }
 
     global bus
@@ -194,10 +162,12 @@ def permit_open_door():
     #         relay2_controller.clear_bit(4)
     #         time.sleep(0.2)
 
-
+    relay1_controller.clear_bit(2)
     relay1_controller.clear_bit(0)
     time.sleep(0.115)
     relay1_controller.set_bit(0)
+    time.sleep(1)
+    relay1_controller.set_bit(2)
     time.sleep(4.25)
     close_door()
 
@@ -248,19 +218,20 @@ def get_active_cards():
 
 @retry(tries=10, delay=1)
 def wait_rfid():
-    logger.info("Search key")
-    rfid_port = serial.Serial('/dev/ttyS0', 9600)
-    print(rfid_port)
-    read_byte = (rfid_port.read(system_config.rfid_key_length)[1:11])
-    print(read_byte)
-    key_ = read_byte.decode("utf-8")
-    rfid_port.close()
-    print(key_)
-    if key_:
-        logger.info("key catched {key} {datetime}".format(key=key_, datetime=datetime.utcnow()))
-        return key_
-    else:
-        logger.info(f"No key {key_}")
+    try:
+        logger.info("Search key")
+        rfid_port = serial.Serial('/dev/ttyS0', 9600)
+        read_byte = (rfid_port.read(system_config.rfid_key_length)[1:11])
+        key_ = read_byte.decode("utf-8")
+        rfid_port.close()
+        if key_:
+            logger.info("key catched {key} {datetime}".format(key=key_, datetime=datetime.utcnow()))
+            return key_
+        else:
+            logger.info(f"No key {key_}")
+    except Exception as e:
+        print(f"Error in rfid {e}")
+
 
 
 @retry(tries=3, delay=5)

@@ -62,7 +62,7 @@ def f_using_keys(self):
 
 def f_using_homephone(self):
     logger.info("Use key2")
-    permit_open_door()
+    permit_open_door(homephone=True)
     # relay1_controller.clear_bit(2)
     # time.sleep(0.2)
     # relay1_controller.set_bit(2)
@@ -85,10 +85,11 @@ def init_room():
 
 # открытие замка с предварительной проверкой положения pin23(защелка, запрет) и последующим закрытием по таймауту
 @retry(tries=10, delay=1)
-def permit_open_door():
-    relay1_controller.clear_bit(2)
-    time.sleep(0.2)
-    relay1_controller.set_bit(2)
+def permit_open_door(homephone=False):
+    if not homephone:
+        relay1_controller.clear_bit(2)
+        time.sleep(0.2)
+        relay1_controller.set_bit(2)
     relay1_controller.clear_bit(0)
     time.sleep(0.2)
     relay1_controller.set_bit(0)

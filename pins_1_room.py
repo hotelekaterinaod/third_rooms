@@ -85,9 +85,6 @@ def log_last_call(func):
         func_name = func.__name__
         if func_name in last_call_times:
             last_call_time = last_call_times[func_name]
-            current_time = time.time()
-            seconds_since_last_call = current_time - last_call_time
-            print(f"С момента последнего вызова прошло {seconds_since_last_call:.2f} секунд")
         last_call_times[func_name] = time.time()
         return func(*args, **kwargs)
     return wrapper
@@ -535,8 +532,12 @@ def cardreader_find():
     global is_empty
     if "cardreader_before" in last_call_times:
         last_call_time = last_call_times["cardreader_before"]
-        print(f"Функция cardreader_before была вызвана в последний раз в {last_call_time}")
-        if last_call_time >= 10:
+        current_time = time.time()
+        seconds_since_last_call = current_time - last_call_time
+        seconds = int(seconds_since_last_call)
+        print(f"С момента последнего вызова прошло {seconds} секунд")
+
+        if seconds >= 6:
             is_empty = False
         else:
             is_empty = True

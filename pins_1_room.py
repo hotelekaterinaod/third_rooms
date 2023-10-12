@@ -232,7 +232,9 @@ def is_door_locked_from_inside():
 
 
 def cardreader_before(self):
-    print(f"Card Insert ?, {self.state} , {self.__dict__}")
+    #print(f"Card Insert ?, {self.state} , {self.__dict__}")
+    pass
+
 
 def init_room():
     logger.info("Init room")
@@ -517,6 +519,7 @@ async def get_logs(request: Request):
 def cardreader_find():
     global is_empty
     card_present = not GPIO.input(22)
+    print(not bool(room_controller[22].state))
     if card_present:
         print("Карта обнаружена")
         is_empty = False

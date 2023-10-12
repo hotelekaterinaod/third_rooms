@@ -375,7 +375,7 @@ def get_active_cards():
             card_role = get_card_role(key)
             if card_role == "User":
                 is_sold == True
-                logger.info(f"number sold")
+                # logger.info(f"number sold")
                 break
 
 
@@ -531,7 +531,7 @@ def main():
                 # if is_door_locked_from_inside():
                 #     relay2_controller.clear_bit(4)
 
-            card_present = not GPIO.input(card_reader_pin)
+            card_present = GPIO.input(card_reader_pin)
             if card_present:
                 print("Карта обнаружена")
                 is_empty = False

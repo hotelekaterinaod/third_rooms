@@ -275,7 +275,11 @@ def get_card_role(card):
     global active_cards
     # TODO Change index
     if card:
-        tip_index = card[4]
+        try:
+            tip_index = int(card[4])
+        except:
+            tip_index = 26
+        print(tip_index, card[4], card)
         if 0 <= tip_index <= 1:
             return "User"
         elif 2 <= tip_index <= 8:

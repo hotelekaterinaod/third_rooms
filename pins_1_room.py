@@ -492,8 +492,19 @@ async def get_logs(request: Request):
         return {'error': 'Log file not found'}
 
 
+def cardreader_find():
+    global is_empty
+    card_present = GPIO.input(22)
+    if card_present:
+        print("Карта обнаружена")
+        is_empty = False
+    else:
+        print("Карта не обнаружена")
+        is_empty = True
+
+
 def main():
-    global room_controller, door_just_closed, active_key, is_empty
+    global room_controller, door_just_closed, active_key,
     print("Start main function")
     #signal.signal(signal.SIGTERM, signal_handler)
     #signal.signal(signal.SIGINT, signal_handler)
@@ -509,11 +520,16 @@ def main():
     check_pin_task = CheckPinTask(interval=timedelta(seconds=system_config.check_pin_timeout), execute=check_pins)
     check_pin_task.start()
 
-    card_reader_pin = 22
+    cardreader_find()
+    cardreader_task = CheckPinTask(interval=timedelta(seconds=system_config.check_pin_timeout), execute=cardreader_find)
+    cardreader_task.start()
+
+
     while True:
         try:
             logger.info("Waiting for the key")
             door_just_closed = False
+
             entered_key = wait_rfid()
             if entered_key in list(active_cards.keys()):
                 # TODO Refactor getting key from DB
@@ -531,14 +547,7 @@ def main():
                 # if is_door_locked_from_inside():
                 #     relay2_controller.clear_bit(4)
 
-            card_present = GPIO.input(card_reader_pin)
-            breakpoint()
-            if card_present:
-                print("Карта обнаружена")
-                is_empty = False
-            else:
-                print("Карта не обнаружена")
-                is_empty = True
+
         except ProgramKilled:
             logger.info("Program killed: running cleanup code")
             card_task.stop()

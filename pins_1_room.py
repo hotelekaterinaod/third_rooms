@@ -530,21 +530,13 @@ async def get_logs(request: Request):
 
 def cardreader_find():
     global is_empty
-    if "cardreader_before" in last_call_times:
-        last_call_time = last_call_times["cardreader_before"]
-        current_time = time.time()
-        seconds_since_last_call = current_time - last_call_time
-        seconds = int(seconds_since_last_call)
-        # print(f"С момента последнего вызова прошло {seconds} секунд")
-
-        if seconds >= 5:
-            print("в номере кто-то есть")
-            is_empty = False
-        else:
-            is_empty = True
-            print("в номере никого нет")
+    card_present = GPIO.input(22)
+    if card_present:
+        print("Карта обнаружена")
+        is_empty = False
     else:
-        print("Функция cardreader_before еще не была вызвана")
+        print("Карта не обнаружена")
+        is_empty = True
 
 
 
@@ -568,7 +560,7 @@ def main():
     check_pin_task.start()
 
     cardreader_find()
-    cardreader_task = CheckCardTask(interval=timedelta(seconds=2), execute=cardreader_find)
+    cardreader_task = CheckCardTask(interval=timedelta(seconds=4), execute=cardreader_find)
     cardreader_task.start()
 
 

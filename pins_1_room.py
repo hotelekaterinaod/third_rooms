@@ -513,7 +513,7 @@ async def get_logs(request: Request):
 
 def cardreader_find():
     global is_empty
-    card_present = GPIO.input(22)
+    card_present = not GPIO.input(22)
     if card_present:
         print("Карта обнаружена")
         is_empty = False

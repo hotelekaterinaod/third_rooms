@@ -259,7 +259,7 @@ def init_room():
         19: PinController(19, f_fire_detector2),  # (датчик дыма 2)
         20: PinController(20, f_window1),  # (окно1-балкон)
         21: PinController(21, f_flooding_sensor),  # (датчик затопления ВЩ)
-        22: PinController(22, f_card_key,  up_down=GPIO.PUD_UP),  # картоприемник
+        22: PinController(22, f_card_key, react_on=GPIO.FALLING, up_down=GPIO.PUD_UP),  # картоприемник
         23: PinController(23, f_lock_door_from_inside, before_callback=f_before_lock_door_from_inside),
         # замок "запрет"
         24: PinController(24, f_lock_latch),  # замок сработка "язычка"
@@ -532,6 +532,7 @@ def main():
                 #     relay2_controller.clear_bit(4)
 
             card_present = GPIO.input(card_reader_pin)
+            breakpoint()
             if card_present:
                 print("Карта обнаружена")
                 is_empty = False

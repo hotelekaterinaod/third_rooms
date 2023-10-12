@@ -31,6 +31,7 @@ lighting_br2 = False  # переменная состояния бра прав�
 
 is_sold = False
 is_empty = True
+last_call_times = {}
 
 db_connection = None
 
@@ -76,6 +77,14 @@ open_door_counter = 1
 
 class ProgramKilled(Exception):
     pass
+
+
+def log_last_call(func):
+    def wrapper(*args, **kwargs):
+        # Записываем текущее время при вызове функции
+        last_call_times[func.__name__] = time.time()
+        return func(*args, **kwargs)
+    return wrapper
 
 
 def f_lock_door_from_inside(self):
@@ -230,7 +239,7 @@ def is_door_locked_from_inside():
     logger.info(f"Door is locked - {not bool(room_controller[23].state)}")
     return not bool(room_controller[23].state)
 
-
+@log_last_call
 def cardreader_before(self):
     #print(f"Card Insert ?, {self.state} , {self.__dict__}")
     pass
@@ -518,14 +527,18 @@ async def get_logs(request: Request):
 
 def cardreader_find():
     global is_empty
-    card_present = not GPIO.input(22)
-    print(not bool(room_controller[22].state))
-    if card_present:
-        print("Карта обнаружена")
-        is_empty = False
+    if "cardreader_before" in last_call_times:
+        last_call_time = last_call_times["cardreader_before"]
+        print(f"Функция cardreader_before была вызвана в последний раз в {last_call_time}")
+        if last_call_time >= 10:
+            is_empty = False
+        else:
+            is_empty = True
     else:
-        print("Карта не обнаружена")
-        is_empty = True
+        print("Функция cardreader_before еще не была вызвана")
+
+
+
 
 
 def main():

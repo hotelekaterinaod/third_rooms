@@ -231,6 +231,9 @@ def is_door_locked_from_inside():
     return not bool(room_controller[23].state)
 
 
+def cardreader_before():
+    print("Card Insert ?")
+
 def init_room():
     logger.info("Init room")
     pin_structure = {
@@ -259,7 +262,7 @@ def init_room():
         19: PinController(19, f_fire_detector2),  # (датчик дыма 2)
         20: PinController(20, f_window1),  # (окно1-балкон)
         21: PinController(21, f_flooding_sensor),  # (датчик затопления ВЩ)
-        22: PinController(22, f_card_key, react_on=GPIO.FALLING, up_down=GPIO.PUD_UP),  # картоприемник
+        22: PinController(22, f_card_key, react_on=GPIO.FALLING, up_down=GPIO.PUD_UP, before_callback=cardreader_before),  # картоприемник
         23: PinController(23, f_lock_door_from_inside, before_callback=f_before_lock_door_from_inside),
         # замок "запрет"
         24: PinController(24, f_lock_latch),  # замок сработка "язычка"

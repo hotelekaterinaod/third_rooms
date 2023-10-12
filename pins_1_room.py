@@ -535,12 +535,14 @@ def cardreader_find():
         current_time = time.time()
         seconds_since_last_call = current_time - last_call_time
         seconds = int(seconds_since_last_call)
-        print(f"С момента последнего вызова прошло {seconds} секунд")
+        # print(f"С момента последнего вызова прошло {seconds} секунд")
 
-        if seconds >= 6:
+        if seconds >= 5:
+            print("в номере кто-то есть")
             is_empty = False
         else:
             is_empty = True
+            print("в номере никого нет")
     else:
         print("Функция cardreader_before еще не была вызвана")
 

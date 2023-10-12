@@ -276,10 +276,10 @@ def get_card_role(card):
     # TODO Change index
     if card:
         try:
-            tip_index = int(card[4])
+            tip_index = int(card[5])
         except:
             tip_index = 26
-        print(tip_index, card[4], card)
+        #print(tip_index, card[4], card)
         if 0 <= tip_index <= 1:
             return "User"
         elif 2 <= tip_index <= 8:

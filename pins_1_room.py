@@ -504,7 +504,7 @@ def cardreader_find():
 
 
 def main():
-    global room_controller, door_just_closed, active_key,
+    global room_controller, door_just_closed, active_key
     print("Start main function")
     #signal.signal(signal.SIGTERM, signal_handler)
     #signal.signal(signal.SIGINT, signal_handler)

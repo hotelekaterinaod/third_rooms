@@ -231,8 +231,8 @@ def is_door_locked_from_inside():
     return not bool(room_controller[23].state)
 
 
-def cardreader_before():
-    print("Card Insert ?")
+def cardreader_before(self):
+    print(f"Card Insert ?, {self.state} , {self.__dict__}")
 
 def init_room():
     logger.info("Init room")

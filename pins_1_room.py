@@ -82,7 +82,13 @@ class ProgramKilled(Exception):
 def log_last_call(func):
     def wrapper(*args, **kwargs):
         # Записываем текущее время при вызове функции
-        last_call_times[func.__name__] = time.time()
+        func_name = func.__name__
+        if func_name in last_call_times:
+            last_call_time = last_call_times[func_name]
+            current_time = time.time()
+            seconds_since_last_call = current_time - last_call_time
+            print(f"С момента последнего вызова прошло {seconds_since_last_call:.2f} секунд")
+        last_call_times[func_name] = time.time()
         return func(*args, **kwargs)
     return wrapper
 

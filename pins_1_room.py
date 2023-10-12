@@ -29,6 +29,9 @@ lighting_main2 = False  # переменная состояния основно
 lighting_bl2 = False  # переменная состояния бра левый спальня2
 lighting_br2 = False  # переменная состояния бра правый спальня2
 
+is_sold = False
+is_empty = True
+
 db_connection = None
 
 bus = smbus.SMBus(1)
@@ -153,7 +156,7 @@ def f_fire_detector4(self):
 # GPIO_22 callback картоприемник
 def f_card_key(self):
     logger.info("Card")
-    pass
+
 
 
 # GPIO_27 callback цепь автоматов
@@ -256,7 +259,7 @@ def init_room():
         19: PinController(19, f_fire_detector2),  # (датчик дыма 2)
         20: PinController(20, f_window1),  # (окно1-балкон)
         21: PinController(21, f_flooding_sensor),  # (датчик затопления ВЩ)
-        22: PinController(22, f_card_key),  # картоприемник
+        22: PinController(22, f_card_key,  up_down=GPIO.PUD_UP),  # картоприемник
         23: PinController(23, f_lock_door_from_inside, before_callback=f_before_lock_door_from_inside),
         # замок "запрет"
         24: PinController(24, f_lock_latch),  # замок сработка "язычка"
@@ -349,7 +352,7 @@ def get_db_connection():
 
 @retry(tries=3, delay=1)
 def get_active_cards():
-    global active_cards, count_keys
+    global active_cards, count_keys, is_sold
     cursor = get_db_connection().cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     sql = "SELECT * FROM table_kluch WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
@@ -366,6 +369,15 @@ def get_active_cards():
         get_db_connection().commit()
         count_keys = len(key_list)
         logger.info("Success update rpi field for new keys")
+
+    if key_list:
+        for key in key_list:
+            card_role = get_card_role(key)
+            if card_role == "User":
+                is_sold == True
+                logger.info(f"number sold")
+                break
+
 
 
 @retry(tries=10, delay=1)
@@ -481,7 +493,7 @@ async def get_logs(request: Request):
 
 
 def main():
-    global room_controller, door_just_closed, active_key
+    global room_controller, door_just_closed, active_key, is_empty
     print("Start main function")
     #signal.signal(signal.SIGTERM, signal_handler)
     #signal.signal(signal.SIGINT, signal_handler)
@@ -497,6 +509,7 @@ def main():
     check_pin_task = CheckPinTask(interval=timedelta(seconds=system_config.check_pin_timeout), execute=check_pins)
     check_pin_task.start()
 
+    card_reader_pin = 22
     while True:
         try:
             logger.info("Waiting for the key")
@@ -517,6 +530,14 @@ def main():
                     time.sleep(0.1)
                 # if is_door_locked_from_inside():
                 #     relay2_controller.clear_bit(4)
+
+            card_present = not GPIO.input(card_reader_pin)
+            if card_present:
+                print("Карта обнаружена")
+                is_empty = False
+            else:
+                print("Карта не обнаружена")
+                is_empty = True
         except ProgramKilled:
             logger.info("Program killed: running cleanup code")
             card_task.stop()

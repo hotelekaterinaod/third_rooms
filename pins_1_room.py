@@ -411,7 +411,7 @@ def get_active_cards():
                 is_sold = True
                 break
         logger.info(f"is_sold {is_sold}")
-        if is_sold:
+        if not is_sold:
             turn_everything_off()
 
 

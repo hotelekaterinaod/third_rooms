@@ -11,7 +11,7 @@
   "rfig_key_table_index": 1,
   "rfid_key_length": 14,
   "check_pin_timeout": 6000,
-  "t1_timeout": 1,
+  "t1_timeout": 3,
   "t2_timeout": 0.50,
   "t3_timeout": 0.50
 }

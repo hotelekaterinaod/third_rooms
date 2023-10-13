@@ -369,13 +369,16 @@ def get_db_connection():
 
 
 def turn_everything_off():
+    global lighting_bl, lighting_br, lighting_main
     logger.info("Turn everything off")
     relay1_controller.set_bit(3)  # соленоиды
     relay1_controller.set_bit(4)  # R2
     relay1_controller.set_bit(5)  # R3
     relay1_controller.set_bit(6)  # бра левый
     relay1_controller.set_bit(7)  # бра правый
-
+    lighting_br = False
+    lighting_bl = False
+    lighting_main = False
     relay2_controller.set_bit(0)
     relay2_controller.set_bit(1)
     relay2_controller.set_bit(7)

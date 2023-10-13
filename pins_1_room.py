@@ -158,7 +158,7 @@ def f_fire_detector4(self):
 
 def start_timer(func, type=1):
     global timer_thread, off_timer_thread
-    logger.info("Start timer")
+    logger.info(f"Start timer type {type}")
     # Создаем и запускаем поток для выполнения delayed_action через 30 минут
     if type == 1:
 
@@ -573,8 +573,10 @@ async def get_logs(request: Request):
         return {'error': 'Log file not found'}
 
 
+
+prev_card_present = True
 def cardreader_find():
-    global is_empty, timer_thread, off_timer_thread
+    global is_empty, timer_thread, off_timer_thread, prev_card_present
     card_present = not GPIO.input(22)
     if card_present:
         print("Карта обнаружена")
@@ -590,7 +592,9 @@ def cardreader_find():
             timer_thread = None
         print("Карта не обнаружена")
         is_empty = True
-        start_timer(timer_turn_everything_off, 2)
+        if prev_card_present != card_present:
+            start_timer(timer_turn_everything_off, 2)
+            prev_card_present = card_present
 
 
 

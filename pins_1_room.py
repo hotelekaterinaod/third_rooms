@@ -30,6 +30,7 @@ lighting_bl2 = False  # переменная состояния бра левы�
 lighting_br2 = False  # переменная состояния бра правый спальня2
 
 is_sold = False
+prev_is_sold = is_sold
 is_empty = True
 last_call_times = {}
 
@@ -385,7 +386,7 @@ def turn_everything_off():
 
 @retry(tries=3, delay=1)
 def get_active_cards():
-    global active_cards, count_keys, is_sold
+    global active_cards, count_keys, is_sold, prev_is_sold
     cursor = get_db_connection().cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     sql = "SELECT * FROM table_kluch WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
@@ -411,9 +412,10 @@ def get_active_cards():
                 is_sold = True
                 break
         logger.info(f"is_sold {is_sold}")
-        if not is_sold:
-            turn_everything_off()
-
+        if prev_is_sold != is_sold:
+            if is_sold:
+                turn_everything_off()
+            prev_is_sold = is_sold
 
 
 @retry(tries=10, delay=1)

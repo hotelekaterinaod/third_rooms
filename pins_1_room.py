@@ -575,7 +575,7 @@ def cardreader_find():
         is_empty = False
     else:
         if timer_thread:
-            timer_thread.stop()
+            timer_thread.deamon()
             logger.info("Stop timer")
         print("Карта не обнаружена")
         is_empty = True

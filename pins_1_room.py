@@ -160,8 +160,13 @@ def start_timer(func):
     logger.info("Start timer")
     # Создаем и запускаем поток для выполнения delayed_action через 30 минут
     delay_seconds = int(system_config.t1_timeout) * 60
-    timer_thread = threading.Thread(delay_seconds, func)
+    timer_thread = threading.Thread(target=func, args=[delay_seconds])
     timer_thread.start()
+
+
+def timer_turn_everything_off(time):
+    time.sleep(time)
+    turn_everything_off()
 
 
 def turn_on():

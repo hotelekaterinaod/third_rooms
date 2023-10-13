@@ -176,7 +176,7 @@ def turn_on():
     relay1_controller.clear_bit(4)  # R2
     relay1_controller.clear_bit(5)  # R3
     relay2_controller.clear_bit(1) # кондиционер
-    start_timer(turn_everything_off)
+    start_timer(timer_turn_everything_off)
 
 
 # GPIO_22 callback картоприемник

@@ -159,18 +159,19 @@ def start_timer(func):
     global timer_thread
     logger.info("Start timer")
     # Создаем и запускаем поток для выполнения delayed_action через 30 минут
-    timer_thread = threading.Thread(target=func)
+    delay_seconds = int(system_config.t1_timeout) * 60
+    timer_thread = threading.Thread(delay_seconds, func)
     timer_thread.start()
 
 
 def turn_on():
     global lighting_bl, lighting_br, lighting_main
     logger.info("Turn everything on")
-    start_timer(turn_everything_off)
     relay1_controller.clear_bit(3)  # соленоиды
     relay1_controller.clear_bit(4)  # R2
     relay1_controller.clear_bit(5)  # R3
     relay2_controller.clear_bit(1) # кондиционер
+    start_timer(turn_everything_off)
 
 
 # GPIO_22 callback картоприемник

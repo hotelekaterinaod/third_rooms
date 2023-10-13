@@ -33,6 +33,7 @@ is_sold = False
 prev_is_sold = is_sold
 is_empty = True
 timer_thread = None
+off_timer_thread = None
 
 db_connection = None
 
@@ -155,14 +156,19 @@ def f_fire_detector4(self):
     pass
 
 
-def start_timer(func):
-    global timer_thread
+def start_timer(func, type=1):
+    global timer_thread, off_timer_thread
     logger.info("Start timer")
     # Создаем и запускаем поток для выполнения delayed_action через 30 минут
-    delay_seconds = int(system_config.t1_timeout) * 60
-    timer_thread = multiprocessing.Process(target=func, args=(delay_seconds, ))
-    timer_thread.start()
+    if type == 1:
 
+        delay_seconds = int(system_config.t1_timeout * 60)
+        timer_thread = multiprocessing.Process(target=func, args=(delay_seconds, ))
+        timer_thread.start()
+    elif type == 2:
+        delay_seconds = int(system_config.t2_timeout * 60)
+        off_timer_thread = multiprocessing.Process(target=func, args=(delay_seconds, ))
+        off_timer_thread.start()
 
 def timer_turn_everything_off(time_seconds):
     time.sleep(time_seconds)
@@ -568,17 +574,23 @@ async def get_logs(request: Request):
 
 
 def cardreader_find():
-    global is_empty, timer_thread
+    global is_empty, timer_thread, off_timer_thread
     card_present = not GPIO.input(22)
     if card_present:
         print("Карта обнаружена")
         is_empty = False
+        if off_timer_thread:
+            off_timer_thread.terminate()
+            logger.info("Stop timer")
+            off_timer_thread = None
     else:
         if timer_thread:
             timer_thread.terminate()
             logger.info("Stop timer")
+            timer_thread = None
         print("Карта не обнаружена")
         is_empty = True
+        start_timer(timer_turn_everything_off, 2)
 
 
 

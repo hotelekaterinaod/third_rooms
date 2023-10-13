@@ -160,7 +160,7 @@ def start_timer(func):
     logger.info("Start timer")
     # Создаем и запускаем поток для выполнения delayed_action через 30 минут
     delay_seconds = int(system_config.t1_timeout) * 60
-    timer_thread = multiprocessing.Process(target=func, args=(delay_seconds))
+    timer_thread = multiprocessing.Process(target=func, args=(delay_seconds, ))
     timer_thread.start()
 
 

@@ -406,8 +406,9 @@ def get_active_cards():
             card_role = get_card_role(key)
             if card_role == "User":
                 is_sold == True
-                # logger.info(f"number sold")
+                logger.info(f"number sold")
                 break
+        logger.info(f"is_sold {is_sold}")
         if not is_sold:
             turn_everything_off()
 

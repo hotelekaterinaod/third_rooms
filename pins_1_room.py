@@ -440,10 +440,10 @@ def get_active_cards():
 
 
 
-    sql_update = "UPDATE table_kluch SET tip = 3 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
-                 "room_number} AND kl = '000037E663'".format(now=now, room_number=system_config.room_number)
-    cursor.execute(sql_update)
-    get_db_connection().commit()
+    # sql_update = "UPDATE table_kluch SET tip = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
+    #              "room_number} AND kl = '000037E663'".format(now=now, room_number=system_config.room_number)
+    # cursor.execute(sql_update)
+    # get_db_connection().commit()
 
 
 

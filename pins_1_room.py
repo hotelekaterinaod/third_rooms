@@ -10,7 +10,7 @@ import serial
 import RPi.GPIO as GPIO
 from retry import retry
 import logging
-import asyncio
+import multiprocessing
 
 from pin_controller import PinController
 from relaycontroller import RelayController
@@ -160,7 +160,7 @@ def start_timer(func):
     logger.info("Start timer")
     # Создаем и запускаем поток для выполнения delayed_action через 30 минут
     delay_seconds = int(system_config.t1_timeout) * 60
-    timer_thread = threading.Thread(target=func, args=[delay_seconds])
+    timer_thread = multiprocessing.Process(target=func, args=(delay_seconds))
     timer_thread.start()
 
 
@@ -575,7 +575,7 @@ def cardreader_find():
         is_empty = False
     else:
         if timer_thread:
-            timer_thread.deamon()
+            timer_thread.terminate()
             logger.info("Stop timer")
         print("Карта не обнаружена")
         is_empty = True

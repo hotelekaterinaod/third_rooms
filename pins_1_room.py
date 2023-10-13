@@ -157,6 +157,7 @@ def f_fire_detector4(self):
 
 def start_timer(func):
     global timer_thread
+    logger.info("Start timer")
     # Создаем и запускаем поток для выполнения delayed_action через 30 минут
     timer_thread = threading.Thread(target=func)
     timer_thread.start()
@@ -177,7 +178,8 @@ def f_card_key(self):
     logger.info("Card")
     global active_key
     card_role = get_card_role(active_key)
-    if card_role == 'Admin' or card_role == 'Worker':
+    logger.info(card_role)
+    if card_role == "Admin" or card_role == "Worker":
         turn_on()
 
 
@@ -423,7 +425,7 @@ def get_active_cards():
                 break
         logger.info(f"is_sold {is_sold}")
         if prev_is_sold != is_sold:
-            if not is_sold:
+            if is_sold:
                 turn_everything_off()
             prev_is_sold = is_sold
 
@@ -568,6 +570,7 @@ def cardreader_find():
     else:
         if timer_thread:
             timer_thread.stop()
+            logger.info("Stop timer")
         print("Карта не обнаружена")
         is_empty = True
 

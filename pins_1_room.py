@@ -49,7 +49,7 @@ relay1_controller.set_bit(0)  # открыть замок
 relay1_controller.set_bit(1)  # закрыть замок
 relay1_controller.set_bit(2)  # аварийное освещение
 relay1_controller.set_bit(3)  # соленоиды
-relay1_controller.clear_bit(4)  # R2
+relay1_controller.set_bit(4)  # R2
 relay1_controller.set_bit(5)  # R3
 relay1_controller.set_bit(6)  # бра левый
 relay1_controller.set_bit(7)  # бра правый

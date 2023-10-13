@@ -581,6 +581,8 @@ def cardreader_find():
     if card_present:
         print("Карта обнаружена")
         is_empty = False
+        if prev_card_present != card_present:
+            prev_card_present = card_present
         if off_timer_thread:
             off_timer_thread.terminate()
             logger.info("Stop timer")

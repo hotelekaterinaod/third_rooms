@@ -164,8 +164,8 @@ def start_timer(func):
     timer_thread.start()
 
 
-def timer_turn_everything_off(time):
-    time.sleep(time)
+def timer_turn_everything_off(time_seconds):
+    time.sleep(time_seconds)
     turn_everything_off()
 
 

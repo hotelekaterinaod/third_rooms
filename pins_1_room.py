@@ -367,6 +367,19 @@ def get_db_connection():
     return db_connection
 
 
+
+def turn_everything_off():
+    logger.info("Turn everything off")
+    relay1_controller.clear_bit(3)  # соленоиды
+    relay1_controller.clear_bit(4)  # R2
+    relay1_controller.clear_bit(5)  # R3
+    relay1_controller.clear_bit(6)  # бра левый
+    relay1_controller.clear_bit(7)  # бра правый
+
+    relay2_controller.clear_bit(0)
+    relay2_controller.clear_bit(1)
+    relay2_controller.clear_bit(7)
+
 @retry(tries=3, delay=1)
 def get_active_cards():
     global active_cards, count_keys, is_sold
@@ -388,12 +401,15 @@ def get_active_cards():
         logger.info("Success update rpi field for new keys")
 
     if key_list:
+        is_sold = False
         for key in key_list:
             card_role = get_card_role(key)
             if card_role == "User":
                 is_sold == True
                 # logger.info(f"number sold")
                 break
+        if not is_sold:
+            turn_everything_off()
 
 
 

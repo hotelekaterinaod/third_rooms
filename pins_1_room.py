@@ -32,7 +32,7 @@ lighting_br2 = False  # переменная состояния бра прав�
 is_sold = False
 prev_is_sold = is_sold
 is_empty = True
-last_call_times = {}
+timer_thread = None
 
 db_connection = None
 
@@ -78,17 +78,6 @@ open_door_counter = 1
 
 class ProgramKilled(Exception):
     pass
-
-
-def log_last_call(func):
-    def wrapper(*args, **kwargs):
-        # Записываем текущее время при вызове функции
-        func_name = func.__name__
-        if func_name in last_call_times:
-            last_call_time = last_call_times[func_name]
-        last_call_times[func_name] = time.time()
-        return func(*args, **kwargs)
-    return wrapper
 
 
 def f_lock_door_from_inside(self):
@@ -166,9 +155,30 @@ def f_fire_detector4(self):
     pass
 
 
+def start_timer(func):
+    global timer_thread
+    # Создаем и запускаем поток для выполнения delayed_action через 30 минут
+    timer_thread = threading.Thread(target=func)
+    timer_thread.start()
+
+
+def turn_on():
+    global lighting_bl, lighting_br, lighting_main
+    logger.info("Turn everything on")
+    start_timer(turn_everything_off)
+    relay1_controller.clear_bit(3)  # соленоиды
+    relay1_controller.clear_bit(4)  # R2
+    relay1_controller.clear_bit(5)  # R3
+    relay2_controller.clear_bit(1) # кондиционер
+
+
 # GPIO_22 callback картоприемник
 def f_card_key(self):
     logger.info("Card")
+    global active_key
+    card_role = get_card_role(active_key)
+    if card_role == 'Admin' or card_role == 'Worker':
+        turn_on()
 
 
 
@@ -243,7 +253,7 @@ def is_door_locked_from_inside():
     logger.info(f"Door is locked - {not bool(room_controller[23].state)}")
     return not bool(room_controller[23].state)
 
-@log_last_call
+
 def cardreader_before(self):
     #print(f"Card Insert ?, {self.state} , {self.__dict__}")
     pass
@@ -413,7 +423,7 @@ def get_active_cards():
                 break
         logger.info(f"is_sold {is_sold}")
         if prev_is_sold != is_sold:
-            if not is_sold:
+            if is_sold:
                 turn_everything_off()
             prev_is_sold = is_sold
 
@@ -550,12 +560,14 @@ async def get_logs(request: Request):
 
 
 def cardreader_find():
-    global is_empty
+    global is_empty, timer_thread
     card_present = not GPIO.input(22)
     if card_present:
         print("Карта обнаружена")
         is_empty = False
     else:
+        if timer_thread:
+            timer_thread.stop()
         print("Карта не обнаружена")
         is_empty = True
 

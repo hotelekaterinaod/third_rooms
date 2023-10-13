@@ -34,7 +34,7 @@ class DBConfig:
 class Config:
 
     def __init__(self):
-        with open("config.json") as cf:
+        with open("/home/pi/software/third_rooms/config.json") as cf:
             config_data = json.loads(cf.read())
         self.room_number = config_data["room_number"]
         self.db_config = DBConfig(config_data["db_config"])
@@ -43,6 +43,9 @@ class Config:
         self.rfig_key_table_index = config_data["rfig_key_table_index"]
         self.rfid_key_length = config_data["rfid_key_length"]
         self.check_pin_timeout = config_data["check_pin_timeout"]
+        self.t1_timeout = config_data["t1_timeout"]
+        self.t2_timeout = config_data["t2_timeout"]
+        self.t3_timeout = config_data["t3_timeout"]
 
 
 system_config = Config()

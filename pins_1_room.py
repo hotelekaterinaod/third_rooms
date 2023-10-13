@@ -34,6 +34,7 @@ prev_is_sold = is_sold
 is_empty = True
 timer_thread = None
 off_timer_thread = None
+second_light_thread = None
 
 db_connection = None
 
@@ -175,24 +176,28 @@ def timer_turn_everything_off(time_seconds):
     turn_everything_off()
 
 
-def turn_on():
+def turn_on(type = 1):
     global lighting_bl, lighting_br, lighting_main
     logger.info("Turn everything on")
     relay1_controller.clear_bit(3)  # соленоиды
     relay1_controller.clear_bit(4)  # R2
     relay1_controller.clear_bit(5)  # R3
     relay2_controller.clear_bit(1) # кондиционер
-    start_timer(timer_turn_everything_off)
+    if type == 1:
+        start_timer(timer_turn_everything_off)
 
 
 # GPIO_22 callback картоприемник
 def f_card_key(self):
     logger.info("Card")
-    global active_key
+    global active_key, is_sold
     card_role = get_card_role(active_key)
     logger.info(card_role)
-    if card_role == "Admin" or card_role == "Worker":
-        turn_on()
+    if not is_sold:
+        if card_role == "Admin" or card_role == "Worker":
+            turn_on()
+    else:
+        turn_on(type=2)
 
 
 
@@ -337,10 +342,18 @@ def get_card_role(card):
         return None
 
 
+
+def second_light_control():
+    logger.info("Start timer type 3")
+    relay1_controller.clear_bit(2)
+    time.sleep(system_config.t3_timeout)
+    relay1_controller.set_bit(2)
+
+
 # открытие замка с предварительной проверкой положения pin23(защелка, запрет) и последующим закрытием по таймауту
 @retry(tries=10, delay=1)
 def permit_open_door():
-    global door_just_closed, can_open_the_door, active_key
+    global door_just_closed, can_open_the_door, active_key, second_light_thread
     card_role = get_card_role(active_key)
     logger.info(f"Card role: {card_role}")
     if is_door_locked_from_inside() and card_role != "Admin":
@@ -358,6 +371,8 @@ def permit_open_door():
         relay1_controller.clear_bit(1)
         time.sleep(0.115)
         relay1_controller.set_bit(1)
+        second_light_thread = multiprocessing.Process(target=second_light_control)
+        second_light_thread.start()
         time.sleep(4.25)
         close_door(thread_time)
 
@@ -394,10 +409,11 @@ def get_db_connection():
 
 
 def turn_everything_off():
-    global lighting_bl, lighting_br, lighting_main
+    global lighting_bl, lighting_br, lighting_main, is_sold
     logger.info("Turn everything off")
     relay1_controller.set_bit(3)  # соленоиды
-    relay1_controller.set_bit(4)  # R2
+    if not is_sold:
+        relay1_controller.set_bit(4)  # R2
     relay1_controller.set_bit(5)  # R3
     relay1_controller.set_bit(6)  # бра левый
     relay1_controller.set_bit(7)  # бра правый
@@ -437,9 +453,12 @@ def get_active_cards():
                 break
         logger.info(f"is_sold {is_sold}")
         if prev_is_sold != is_sold:
-            if is_sold:
+            if not is_sold:
                 turn_everything_off()
+            else:
+                relay1_controller.clear_bit(4)  # R2
             prev_is_sold = is_sold
+
 
 
 @retry(tries=10, delay=1)
@@ -576,7 +595,7 @@ async def get_logs(request: Request):
 
 prev_card_present = True
 def cardreader_find():
-    global is_empty, timer_thread, off_timer_thread, prev_card_present
+    global is_empty, timer_thread, off_timer_thread, prev_card_present, second_light_thread
     card_present = not GPIO.input(22)
     if card_present:
         print("Карта обнаружена")
@@ -585,12 +604,16 @@ def cardreader_find():
             prev_card_present = card_present
         if off_timer_thread:
             off_timer_thread.terminate()
-            logger.info("Stop timer")
+            logger.info("Stop timer type 2")
             off_timer_thread = None
+        if second_light_thread:
+            second_light_thread.terminate()
+            logger.info("Stop timer type 3")
+            second_light_thread = None
     else:
         if timer_thread:
             timer_thread.terminate()
-            logger.info("Stop timer")
+            logger.info("Stop timer type 1")
             timer_thread = None
         print("Карта не обнаружена")
         is_empty = True

@@ -13,5 +13,5 @@
   "check_pin_timeout": 6000,
   "t1_timeout": 1,
   "t2_timeout": 0.50,
-  "t3_timeout": 30
+  "t3_timeout": 0.50
 }

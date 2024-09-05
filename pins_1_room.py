@@ -195,8 +195,10 @@ def f_card_key(self):
     logger.info(card_role)
     if not is_sold:
         if card_role == "Admin" or card_role == "Worker":
+            print("Включение для работника или админа")
             turn_on()
     else:
+        print("Выключение")
         turn_on(type=2)
 
 
@@ -461,7 +463,7 @@ def get_active_cards():
             card_role = get_card_role(key)
 
             if card_role == "User":
-                print(key)
+                print(key, "Is user")
                 is_sold = True
                 break
         logger.info(f"is_sold {is_sold}")
@@ -610,6 +612,7 @@ prev_card_present = True
 def cardreader_find():
     global is_empty, timer_thread, off_timer_thread, prev_card_present, second_light_thread
     card_present = not GPIO.input(22)
+    print("Карта GPIO ",  card_present)
     if card_present:
         print("Карта обнаружена")
         is_empty = False

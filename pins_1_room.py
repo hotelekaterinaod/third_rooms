@@ -284,7 +284,7 @@ def init_room():
     logger.info("Init room")
     pin_structure = {
         0: None,
-        1: None
+        1: None,
         # кнопка-выключатель бра правый спальня1,
         2: None,
         3: None,

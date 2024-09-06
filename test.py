@@ -12,7 +12,7 @@ from retry import retry
 import logging
 import multiprocessing
 
-from pin_controller import PinController
+from test_controller import PinController
 from relaycontroller import RelayController
 from config import system_config, logger
 

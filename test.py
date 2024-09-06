@@ -1,16 +1,15 @@
 import RPi.GPIO as GPIO
-import time
 
 GPIO.setmode(GPIO.BOARD)
-GPIO.setup(7, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-def callback(channel):
-    print("Edge detected on channel", channel)
+pins_to_test = [7, 11, 13, 15]  # Замените на нужные вам пины
 
-GPIO.add_event_detect(7, GPIO.RISING, callback=callback, bouncetime=200)
+for pin in pins_to_test:
+    try:
+        GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        GPIO.add_event_detect(pin, GPIO.RISING)
+        print(f"Pin {pin} is available for event detection")
+    except RuntimeError as e:
+        print(f"Pin {pin} is not available: {e}")
 
-try:
-    while True:
-        time.sleep(1)
-except KeyboardInterrupt:
-    GPIO.cleanup()
+GPIO.cleanup()

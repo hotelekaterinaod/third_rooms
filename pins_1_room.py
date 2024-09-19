@@ -194,7 +194,7 @@ def f_card_key(self):
     print("Active", active_key)
     card_role = get_card_role(active_key)
     print("Role")
-    logger.info(card_role, "Role")
+    logger.info( "Role")
     # if not is_sold:
     #     if card_role == "Admin" or card_role == "Worker":
     #         print("Включение для работника или админа")

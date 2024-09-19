@@ -328,7 +328,6 @@ def init_room():
 def get_card_role(card):
     global active_cards
     # TODO Change index
-    print(card)
     if card:
         try:
             tip_index = int(card[5])

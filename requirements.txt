@@ -3,6 +3,6 @@ pymssql==2.2.8
 pyserial==3.5
 smbus
 retry==0.9.2
-RPi.GPIO==0.7.1
+rpi-lgpio==0.6
 fastapi==0.103.1
 uvicorn[standard]

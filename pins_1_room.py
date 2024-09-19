@@ -183,23 +183,25 @@ def turn_on(type = 1):
     relay1_controller.clear_bit(4)  # R2
     relay1_controller.clear_bit(5)  # R3
     relay2_controller.clear_bit(1) # кондиционер
-    if type == 1:
-        start_timer(timer_turn_everything_off)
+    #if type == 1:
+    #   start_timer(timer_turn_everything_off)
 
 
 # GPIO_22 callback картоприемник
 def f_card_key(self):
     logger.info("Card")
     global active_key, is_sold
+    print("Active", active_key)
     card_role = get_card_role(active_key)
-    logger.info(card_role)
-    if not is_sold:
-        if card_role == "Admin" or card_role == "Worker":
-            print("Включение для работника или админа")
-            turn_on()
-    else:
-        print("Выключение")
-        turn_on(type=2)
+    print("Role", card_role)
+    logger.info(card_role, "Role")
+    # if not is_sold:
+    #     if card_role == "Admin" or card_role == "Worker":
+    #         print("Включение для работника или админа")
+    #         turn_on()
+    # else:
+    #     print("Выключение")
+    #     turn_on(type=2)
 
 
 
@@ -412,7 +414,7 @@ def get_db_connection():
 
 def turn_everything_off():
     global lighting_bl, lighting_br, lighting_main, is_sold
-    logger.info("Turn everything off")
+    logger.info("Turn everything off !")
     relay1_controller.set_bit(3)  # соленоиды
     if not is_sold:
         relay1_controller.set_bit(4)  # R2
@@ -469,7 +471,8 @@ def get_active_cards():
         logger.info(f"is_sold {is_sold}")
         if prev_is_sold != is_sold:
             if not is_sold:
-                turn_everything_off()
+                print("Is sold check !!!")
+                #turn_everything_off()
             else:
                 relay1_controller.clear_bit(4)  # R2
             prev_is_sold = is_sold
@@ -634,7 +637,7 @@ def cardreader_find():
         print("Карта не обнаружена")
         is_empty = True
         if prev_card_present != card_present:
-            start_timer(timer_turn_everything_off, 2)
+            #start_timer(timer_turn_everything_off, 2)
             prev_card_present = card_present
 
 

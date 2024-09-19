@@ -193,12 +193,12 @@ def f_card_key(self):
     global active_key, is_sold
     print("Active", active_key)
     card_role = get_card_role(active_key)
-    print("Role", card_role)
+    print("Role")
     logger.info(card_role, "Role")
     # if not is_sold:
     #     if card_role == "Admin" or card_role == "Worker":
     #         print("Включение для работника или админа")
-    #         turn_on()
+    turn_on()
     # else:
     #     print("Выключение")
     #     turn_on(type=2)
@@ -328,6 +328,7 @@ def init_room():
 def get_card_role(card):
     global active_cards
     # TODO Change index
+    print(card)
     if card:
         try:
             tip_index = int(card[5])

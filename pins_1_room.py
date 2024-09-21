@@ -347,11 +347,12 @@ def get_card_role(card):
     if card:
         try:
             tip_index = int(card[5])
-            #logger.info(f"role {tip_index}")
+            logger.info(f"role {tip_index}")
+            logger.info(tip_index, card[4], card)
         except:
             tip_index = 26
-            #logger.info(f"role except {tip_index}")
-        #print(tip_index, card[4], card)
+            logger.info(f"role except {tip_index}")
+
         if 0 <= tip_index <= 1:
             #logger.info("User")
             return "User"

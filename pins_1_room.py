@@ -79,7 +79,7 @@ open_door_counter = 1
 
 
 class ProgramKilled(Exception):
-    logger.info("Error for some reason Exception", Exception)
+    logger.info("Error for some reason Exception")
     pass
 
 

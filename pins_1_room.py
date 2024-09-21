@@ -199,9 +199,12 @@ def f_card_key(self):
     logger.info("Card")
     global active_key, is_sold
     print("Active", active_key)
-    card_role = get_card_role(active_key)
-    print("Role")
-    logger.info( "Role")
+    try:
+        card_role = get_card_role(active_key)
+
+        logger.info(f"Role {card_role}")
+    except Exception:
+        pass
     # if not is_sold:
     #     if card_role == "Admin" or card_role == "Worker":
     #         print("Включение для работника или админа")
@@ -340,27 +343,27 @@ def init_room():
 def get_card_role(card):
     global active_cards
     # TODO Change index
-    logger.info("Card role")
+    # logger.info("Card role")
     if card:
         try:
             tip_index = int(card[5])
-            logger.info(f"role {tip_index}")
+            #logger.info(f"role {tip_index}")
         except:
             tip_index = 26
-            logger.info(f"role except {tip_index}")
+            #logger.info(f"role except {tip_index}")
         #print(tip_index, card[4], card)
         if 0 <= tip_index <= 1:
-            logger.info("User")
+            #logger.info("User")
             return "User"
 
         elif 2 <= tip_index <= 8:
-            logger.info("Worker")
+            #logger.info("Worker")
             return "Worker"
         elif tip_index == 9:
-            logger.info("Admin")
+            #logger.info("Admin")
             return "Admin"
         else:
-            logger.info("None User")
+            #logger.info("None User")
             return None
     else:
         return None

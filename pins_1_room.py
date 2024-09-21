@@ -79,17 +79,20 @@ open_door_counter = 1
 
 
 class ProgramKilled(Exception):
+    logger.info("Error for some reason Exception", Exception)
     pass
 
 
 def f_lock_door_from_inside(self):
     # logger.info(f"OFFF {bool(room_controller[23].state)}")
+    logger.info("Lock door from inside")
     if bool(room_controller[23].state):
         relay2_controller.clear_bit(6)  # 6
 
 
 # GPIO_23 callback (проверка сработки внут защелки (ригеля) на закрытие)
 def f_lock_door_from_inside_thread():
+    logger.info("Lock door from inside thread")
     while not bool(room_controller[23].state):
         relay2_controller.set_bit(6)  # 6
         time.sleep(0.2)
@@ -98,6 +101,7 @@ def f_lock_door_from_inside_thread():
 
 
 def f_open_door_indicates_thread():
+    logger.info("Open door indicates thread")
     for i in range(12):
         relay2_controller.set_bit(4)  # 6
         time.sleep(0.2)
@@ -106,11 +110,13 @@ def f_open_door_indicates_thread():
 
 
 def f_before_lock_door_from_inside(self):
+    logger.info("before lock door from inside")
     global close_door_from_inside
     time.sleep(0.01)
     thread_time = threading.Thread(target=f_lock_door_from_inside_thread)
     thread_time.start()
     if self.state:
+        logger.info("Turn off red light")
         thread_time.join()
         relay2_controller.clear_bit(6)  # тушим красный светодиод
 
@@ -172,6 +178,7 @@ def start_timer(func, type=1):
         off_timer_thread.start()
 
 def timer_turn_everything_off(time_seconds):
+    logger.info("Timer for turn off")
     time.sleep(time_seconds)
     turn_everything_off()
 
@@ -233,7 +240,9 @@ def f_window3(self):
 
 # GPIO_16 callback выключатель основного света спальня1
 def f_switch_main(self):
+
     global lighting_main
+    logger.info(f"Switch main {lighting_main}")
     if not lighting_main:
         relay2_controller.clear_bit(0)
         lighting_main = True
@@ -245,6 +254,7 @@ def f_switch_main(self):
 # GPIO_12 callback выключатель бра левый спальня1
 def f_switch_bl(self):
     global lighting_bl
+    logger.info(f"switch bl {lighting_bl}")
     if not lighting_bl:
         relay1_controller.clear_bit(6)
         lighting_bl = True
@@ -256,6 +266,7 @@ def f_switch_bl(self):
 # GPIO_01 callback выключатель бра правый спальня1
 def f_switch_br(self):
     global lighting_br
+    logger.info(f"Switch br {lighting_br}")
     if not lighting_br:
         relay1_controller.clear_bit(7)
         lighting_br = True
@@ -278,6 +289,7 @@ def is_door_locked_from_inside():
 
 
 def cardreader_before(self):
+    logger.info("Cardreader before")
     #print(f"Card Insert ?, {self.state} , {self.__dict__}")
     pass
 
@@ -328,19 +340,27 @@ def init_room():
 def get_card_role(card):
     global active_cards
     # TODO Change index
+    logger.info("Card role")
     if card:
         try:
             tip_index = int(card[5])
+            logger.info(f"role {tip_index}")
         except:
             tip_index = 26
+            logger.info(f"role except {tip_index}")
         #print(tip_index, card[4], card)
         if 0 <= tip_index <= 1:
+            logger.info("User")
             return "User"
+
         elif 2 <= tip_index <= 8:
+            logger.info("Worker")
             return "Worker"
         elif tip_index == 9:
+            logger.info("Admin")
             return "Admin"
         else:
+            logger.info("None User")
             return None
     else:
         return None
@@ -359,7 +379,7 @@ def second_light_control():
 def permit_open_door():
     global door_just_closed, can_open_the_door, active_key, second_light_thread
     card_role = get_card_role(active_key)
-    logger.info(f"Card role: {card_role}")
+    logger.info(f"Card role after all: {card_role}")
     if is_door_locked_from_inside() and card_role != "Admin":
         logger.info("The door has been locked by the guest.")
         for i in range(10):
@@ -368,6 +388,7 @@ def permit_open_door():
             relay2_controller.clear_bit(4)
             time.sleep(0.2)
     else:
+        logger.info("Can open the door")
         can_open_the_door = True
         thread_time = threading.Thread(target=f_open_door_indicates_thread)
         thread_time.start()
@@ -502,7 +523,7 @@ def check_pins():
     state_message = "Pin state : "
     for item in pin_list_for_check:
         state_message += "pin#{pin}:{state}, ".format(pin=room_controller[item].pin, state=room_controller[item].state)
-    logger.info(state_message)
+    logger.info(f"State: {state_message}")
 
 
 def signal_handler(signum, frame):

@@ -69,6 +69,9 @@ class RelayController:
         Возвращает текущее состояние всех битов в виде целого числа.
 
         """
+
         state = self.__bus.read_byte_data(self.__address, 0x09)  # Считываем данные с регистра 0x09
-        self.__state = f'{state:08b}'  # Обновляем внутреннее состояние в строковом формате
-        return state
+        print(f"Raw state from I2C: {state} ({bin(state)})")
+        masked_state = state & 0x0F
+        print("State - ", masked_state)
+        return f'{masked_state:08b}'

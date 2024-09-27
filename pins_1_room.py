@@ -399,8 +399,8 @@ def permit_open_door():
         relay1_controller.clear_bit(1)
         time.sleep(0.115)
         relay1_controller.set_bit(1)
-        second_light_thread = multiprocessing.Process(target=second_light_control)
-        second_light_thread.start()
+        #second_light_thread = multiprocessing.Process(target=second_light_control)
+        #second_light_thread.start()
         time.sleep(4.25)
         close_door(thread_time)
 

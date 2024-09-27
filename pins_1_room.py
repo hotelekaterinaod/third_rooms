@@ -415,9 +415,9 @@ def close_door(thread_time=None):
     can_open_the_door = False
     door_just_closed = True
     time.sleep(0.1)
-    # relay1_controller.clear_bit(0)
-    # time.sleep(0.115)
-    # relay1_controller.set_bit(0)
+    relay1_controller.clear_bit(0)
+    time.sleep(0.115)
+    relay1_controller.set_bit(0)
     if thread_time:
         thread_time.join()
     #relay2_controller.clear_bit(4)

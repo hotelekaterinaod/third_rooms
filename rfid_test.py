@@ -1,7 +1,7 @@
 import serial
 from config import system_config, logger
 
-def wait_for_rfid(port='/dev/ttyAMA0', baudrate=9600, timeout=1):
+def wait_for_rfid(port='/dev/ttyS0', baudrate=9600, timeout=1):
     try:
 
         while True:

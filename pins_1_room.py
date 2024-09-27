@@ -347,10 +347,10 @@ def get_card_role(card):
     if card:
         try:
             tip_index = int(card[5])
-            logger.info(f"role {tip_index}")
+            #logger.info(f"role {tip_index}")
         except:
             tip_index = 26
-            logger.info(f"role except {tip_index}")
+            #logger.info(f"role except {tip_index}")
 
         if 0 <= tip_index <= 1:
             #logger.info("User")
@@ -639,30 +639,30 @@ prev_card_present = True
 def cardreader_find():
     global is_empty, timer_thread, off_timer_thread, prev_card_present, second_light_thread
     card_present = not GPIO.input(22)
-    print("Карта GPIO ",  card_present)
+    #print("Карта GPIO ",  card_present)
     if card_present:
         print("Карта обнаружена")
         is_empty = False
-        if prev_card_present != card_present:
-            prev_card_present = card_present
-        if off_timer_thread:
-            off_timer_thread.terminate()
-            logger.info("Stop timer type 2")
-            off_timer_thread = None
-        if second_light_thread:
-            second_light_thread.terminate()
-            logger.info("Stop timer type 3")
-            second_light_thread = None
+        # if prev_card_present != card_present:
+        #         #     prev_card_present = card_present
+        #         # if off_timer_thread:
+        #         #     off_timer_thread.terminate()
+        #         #     logger.info("Stop timer type 2")
+        #         #     off_timer_thread = None
+        #         # if second_light_thread:
+        #         #     second_light_thread.terminate()
+        #         #     logger.info("Stop timer type 3")
+        #         #     second_light_thread = None
     else:
-        if timer_thread:
-            timer_thread.terminate()
-            logger.info("Stop timer type 1")
-            timer_thread = None
+        # if timer_thread:
+        #     timer_thread.terminate()
+        #     logger.info("Stop timer type 1")
+        #     timer_thread = None
         print("Карта не обнаружена")
-        is_empty = True
-        if prev_card_present != card_present:
-            #start_timer(timer_turn_everything_off, 2)
-            prev_card_present = card_present
+        # is_empty = True
+        # if prev_card_present != card_present:
+        #     #start_timer(timer_turn_everything_off, 2)
+        #     prev_card_present = card_present
 
 
 

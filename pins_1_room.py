@@ -420,7 +420,7 @@ def close_door(thread_time=None):
     relay1_controller.set_bit(0)
     if thread_time:
         thread_time.join()
-    relay2_controller.clear_bit(4)
+    #relay2_controller.clear_bit(4)
     logger.info("Client has been entered!")
 
 

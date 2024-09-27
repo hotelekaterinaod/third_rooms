@@ -640,8 +640,12 @@ def cardreader_find():
     global is_empty, timer_thread, off_timer_thread, prev_card_present, second_light_thread
     card_present = not GPIO.input(22)
     #print("Карта GPIO ",  card_present)
-    print(f"State for relay 1{relay1_controller.get_state()}")
-    print(f"State for relay 2{relay2_controller.get_state()}")
+    data1 = bus.read_byte(0x38)
+    data2 = bus.read_byte(0x39)
+
+    logger.info(str(bin(data1) + " " + bin(data2)))
+    print(f"State for relay 1{bin(relay1_controller.get_state())}")
+    print(f"State for relay 2{bin(relay2_controller.get_state())}")
     if card_present:
         #print("Карта обнаружена")
         is_empty = False

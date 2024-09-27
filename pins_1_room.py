@@ -301,7 +301,7 @@ def init_room():
     logger.info("Init room")
     pin_structure = {
         0: None,
-        1: PinController(1, f_switch_br, react_on=GPIO.FALLING, bouncetime=200),
+        1: PinController(1, f_switch_br, react_on=GPIO.FALLING, bouncetime=500),
         # кнопка-выключатель бра правый спальня1,
         2: None,
         3: None,
@@ -312,12 +312,12 @@ def init_room():
         9: None,
         10: PinController(10, f_safe, react_on=GPIO.FALLING),  # (сейф),
         11: None,  # кнопка-выключатель бра правый спальня2,
-        12: PinController(12, f_switch_bl, react_on=GPIO.FALLING, bouncetime=200),
+        12: PinController(12, f_switch_bl, react_on=GPIO.FALLING, bouncetime=500),
         # кнопка-выключатель бра левый спальня1
         13: PinController(13, f_window3),  # (окно3)
         14: None,
         15: None,
-        16: PinController(16, f_switch_main, react_on=GPIO.FALLING, bouncetime=200),
+        16: PinController(16, f_switch_main, react_on=GPIO.FALLING, bouncetime=500),
         # кнопка-выключатель основного света спальня1
         17: PinController(17, f_energy_sensor, up_down=GPIO.PUD_DOWN, react_on=GPIO.RISING),
         # (контроль наличия питания R3 (освещения))

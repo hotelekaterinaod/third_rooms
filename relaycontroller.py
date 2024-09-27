@@ -27,7 +27,7 @@ class RelayController:
         """
         print(f"Before set bit {bit} for address {self.__address}: {self.__state}")
         state_list = list(self.__state)
-        state_list[bit] = '1'  # Меняем бит на 1 (нумерация слева направо)
+        state_list[7 - bit] = '1'
         self.__state = ''.join(state_list)
         print(f"Set bit {bit}, new state: {bin(int(self.__state, 2))}")
         self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
@@ -39,7 +39,7 @@ class RelayController:
         """
         print(f"Before clear bit {bit} for address {self.__address}: {self.__state}")
         state_list = list(self.__state)
-        state_list[bit] = '0'  # Меняем бит на 0
+        state_list[7 - bit] = '0'  # Меняем бит на 0
         self.__state = ''.join(state_list)
         print(f"Clear bit {bit}, new state: {bin(int(self.__state, 2))}")
         self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
@@ -50,7 +50,7 @@ class RelayController:
         Переключает бит (вкл/выкл), обновляя состояние.
         """
         state_list = list(self.__state)
-        state_list[bit] = '0' if state_list[bit] == '1' else '1'  # Инвертируем бит
+        state_list[7 - bit] = '0' if state_list[7 - bit] == '1' else '1' # Инвертируем бит
         self.__state = ''.join(state_list)
         print(f"Toggle bit {bit}, new state: {bin(int(self.__state, 2))}")
         self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
@@ -60,7 +60,7 @@ class RelayController:
         """
         Проверяет состояние конкретного бита (0 или 1).
         """
-        bit_state = self.__state[bit]
+        bit_state = self.__state[7 - bit]
         print(f"Check bit {bit} for address {self.__address}: {bit_state}")
         return bit_state
 

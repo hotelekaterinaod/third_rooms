@@ -492,7 +492,7 @@ def get_active_cards():
                 print(key, "Is user")
                 is_sold = True
                 break
-        logger.info(f"is_sold {is_sold}")
+        #logger.info(f"is_sold {is_sold}")
         if prev_is_sold != is_sold:
             if not is_sold:
                 print("Is sold check !!!")
@@ -640,8 +640,10 @@ def cardreader_find():
     global is_empty, timer_thread, off_timer_thread, prev_card_present, second_light_thread
     card_present = not GPIO.input(22)
     #print("Карта GPIO ",  card_present)
+    print(f"State for relay 1{bin(relay1_controller.get_state())}")
+    print(f"State for relay 2{bin(relay2_controller.get_state())}")
     if card_present:
-        print("Карта обнаружена")
+        #print("Карта обнаружена")
         is_empty = False
         # if prev_card_present != card_present:
         #         #     prev_card_present = card_present
@@ -654,11 +656,12 @@ def cardreader_find():
         #         #     logger.info("Stop timer type 3")
         #         #     second_light_thread = None
     else:
+        pass
         # if timer_thread:
         #     timer_thread.terminate()
         #     logger.info("Stop timer type 1")
         #     timer_thread = None
-        print("Карта не обнаружена")
+        #print("Карта не обнаружена")
         # is_empty = True
         # if prev_card_present != card_present:
         #     #start_timer(timer_turn_everything_off, 2)

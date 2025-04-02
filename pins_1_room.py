@@ -45,23 +45,20 @@ relay1_controller = RelayController(0x38)
 relay2_controller = RelayController(0x39)
 
 # соответствие портов контроллеров
-relay1_controller.set_bit(0)  # открыть замок
-relay1_controller.set_bit(1)  # закрыть замок
-relay1_controller.set_bit(2)  # аварийное освещение
-relay1_controller.set_bit(3)  # соленоиды
-relay1_controller.set_bit(4)  # R2
-relay1_controller.set_bit(5)  # R3
-relay1_controller.set_bit(6)  # бра левый
-relay1_controller.set_bit(7)  # бра правый
+relay1_controller.set_bit(0)  # Открыть замок (K:IN1)
+relay1_controller.set_bit(1)  # Закрыть замок (K:IN2)
+relay1_controller.set_bit(2)  # Зеленый светодиод (X:7)
+relay1_controller.set_bit(3)  # Синий светодиод (X:8)
+relay1_controller.set_bit(4)  # Красный светодиод (X:9)
+relay1_controller.set_bit(5)  # Группа - R2 (силовое реле) (KG0)
 
-relay2_controller.set_bit(0)  # свет спальня
-relay2_controller.set_bit(1)  # кондиционеры
-relay2_controller.set_bit(2)  # радиатор1
-relay2_controller.set_bit(3)  # радиатор2
-relay2_controller.clear_bit(4)  # зеленый
-relay2_controller.clear_bit(5)  # синий
-relay2_controller.clear_bit(6)  # красный
-relay2_controller.set_bit(7)  # свет спальня спальня2
+relay2_controller.set_bit(0)  # Аварийное освещение (KG1:IN1)
+relay2_controller.set_bit(1)  # Группа - R3 (свет) (KG1:IN2)
+relay2_controller.set_bit(2)  # Соленоиды (KG1:IN3)
+relay2_controller.set_bit(4)  # Радиатор1 (KG2:IN1)
+relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
+relay2_controller.set_bit(6)  # Бра левый1 (KG2:IN3)
+relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
 
 data1 = bus.read_byte(0x38)
 data2 = bus.read_byte(0x39)
@@ -94,18 +91,18 @@ def f_lock_door_from_inside(self):
 def f_lock_door_from_inside_thread():
     logger.info("Lock door from inside thread")
     while not bool(room_controller[23].state):
-        relay2_controller.set_bit(6)  # 6
+        relay1_controller.set_bit(4)  # Красный светодиод (X:9)
         time.sleep(0.2)
-        relay2_controller.clear_bit(6)  # 6
+        relay1_controller.clear_bit(4)  # Красный светодиод (X:9)
         time.sleep(0.2)
 
 
 def f_open_door_indicates_thread():
     logger.info("Open door indicates thread")
     for i in range(12):
-        relay2_controller.set_bit(4)  # 6
+        relay1_controller.set_bit(2)  # Зеленый светодиод (X:7)
         time.sleep(0.2)
-        relay2_controller.clear_bit(4)  # 6
+        relay1_controller.clear_bit(2)  # Зеленый светодиод (X:7)
         time.sleep(0.2)
 
 
@@ -118,7 +115,7 @@ def f_before_lock_door_from_inside(self):
     if self.state:
         logger.info("Turn off red light")
         thread_time.join()
-        relay2_controller.clear_bit(6)  # тушим красный светодиод
+        relay1_controller.clear_bit(4)   # тушим красный светодиод
 
 
 # GPIO_24 callback (проверка сработки "язычка" на открытие)
@@ -186,10 +183,10 @@ def timer_turn_everything_off(time_seconds):
 def turn_on(type = 1):
     global lighting_bl, lighting_br, lighting_main
     logger.info("Turn everything on")
-    relay1_controller.clear_bit(3)  # соленоиды
-    relay1_controller.clear_bit(4)  # R2
-    relay1_controller.clear_bit(5)  # R3
-    relay2_controller.clear_bit(1) # кондиционер
+    relay2_controller.clear_bit(2)  # Соленоиды (KG1:IN3)
+    relay1_controller.clear_bit(5)  # Группа - R2 (KG0)
+    relay2_controller.clear_bit(1)  # Группа - R3 (свет) (KG1:IN2)
+    relay2_controller.clear_bit(4)
     #if type == 1:
     #   start_timer(timer_turn_everything_off)
 
@@ -243,14 +240,13 @@ def f_window3(self):
 
 # GPIO_16 callback выключатель основного света спальня1
 def f_switch_main(self):
-
     global lighting_main
     logger.info(f"Switch main {lighting_main}")
     if not lighting_main:
-        relay2_controller.clear_bit(0)
+        relay2_controller.clear_bit(5)  # Свет спальня1 (KG2:IN2)
         lighting_main = True
     else:
-        relay2_controller.set_bit(0)
+        relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
         lighting_main = False
 
 
@@ -259,10 +255,10 @@ def f_switch_bl(self):
     global lighting_bl
     logger.info(f"switch bl {lighting_bl}")
     if not lighting_bl:
-        relay1_controller.clear_bit(6)
+        relay2_controller.clear_bit(6)  # Бра левый1 (KG2:IN3)
         lighting_bl = True
     else:
-        relay1_controller.set_bit(6)
+        relay2_controller.set_bit(6)  # Бра левый1 (KG2:IN3)
         lighting_bl = False
 
 
@@ -271,10 +267,10 @@ def f_switch_br(self):
     global lighting_br
     logger.info(f"Switch br {lighting_br}")
     if not lighting_br:
-        relay1_controller.clear_bit(7)
+        relay2_controller.clear_bit(7)  # Бра правый1 (KG2:IN4)
         lighting_br = True
     else:
-        relay1_controller.set_bit(7)
+        relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
         lighting_br = False
 
 
@@ -372,9 +368,9 @@ def get_card_role(card):
 
 def second_light_control():
     logger.info("Start timer type 3")
-    relay1_controller.clear_bit(2)
+    relay2_controller.clear_bit(0)  # Аварийное освещение (KG1:IN1)
     time.sleep(system_config.t3_timeout)
-    relay1_controller.set_bit(2)
+    relay2_controller.set_bit(0)  # Аварийное освещение (KG1:IN1)
 
 
 # открытие замка с предварительной проверкой положения pin23(защелка, запрет) и последующим закрытием по таймауту
@@ -386,9 +382,9 @@ def permit_open_door():
     if is_door_locked_from_inside() and card_role != "Admin":
         logger.info("The door has been locked by the guest.")
         for i in range(10):
-            relay2_controller.set_bit(4)
+            relay1_controller.set_bit(2)  # Зеленый светодиод (X:7)
             time.sleep(0.2)
-            relay2_controller.clear_bit(4)
+            relay1_controller.clear_bit(2)  # Зеленый светодиод (X:7)
             time.sleep(0.2)
     else:
         logger.info("Can open the door")
@@ -396,9 +392,9 @@ def permit_open_door():
         thread_time = threading.Thread(target=f_open_door_indicates_thread)
         thread_time.start()
 
-        relay1_controller.clear_bit(1)
+        relay1_controller.clear_bit(1)  # Закрыть замок (K:IN2)
         time.sleep(0.115)
-        relay1_controller.set_bit(1)
+        relay1_controller.set_bit(1)  # Закрыть замок (K:IN2)
         #second_light_thread = multiprocessing.Process(target=second_light_control)
         #second_light_thread.start()
         time.sleep(4.25)
@@ -415,12 +411,12 @@ def close_door(thread_time=None):
     can_open_the_door = False
     door_just_closed = True
     time.sleep(0.1)
-    relay1_controller.clear_bit(0)
+    relay1_controller.clear_bit(0)  # Открыть замок (K:IN1)
     time.sleep(0.115)
-    relay1_controller.set_bit(0)
+    relay1_controller.set_bit(0)  # Открыть замок (K:IN1)
     if thread_time:
         thread_time.join()
-    #relay2_controller.clear_bit(4)
+    #relay1_controller.clear_bit(2)  # Зеленый светодиод (X:7)
     logger.info("Client has been entered!")
 
 
@@ -439,18 +435,17 @@ def get_db_connection():
 def turn_everything_off():
     global lighting_bl, lighting_br, lighting_main, is_sold
     logger.info("Turn everything off !")
-    relay1_controller.set_bit(3)  # соленоиды
+    relay2_controller.set_bit(2)  # Соленоиды (KG1:IN3)
     if not is_sold:
-        relay1_controller.set_bit(4)  # R2
-    relay1_controller.set_bit(5)  # R3
-    relay1_controller.set_bit(6)  # бра левый
-    relay1_controller.set_bit(7)  # бра правый
+        relay1_controller.set_bit(5)  # Группа - R2 (KG0)
+    relay2_controller.set_bit(1)  # Группа - R3 (свет) (KG1:IN2)
+    relay2_controller.set_bit(6)  # Бра левый1 (KG2:IN3)
+    relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
     lighting_br = False
     lighting_bl = False
     lighting_main = False
-    relay2_controller.set_bit(0)
-    relay2_controller.set_bit(1)
-    relay2_controller.set_bit(7)
+    relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
+    relay2_controller.set_bit(4)  
 
 @retry(tries=3, delay=1)
 def get_active_cards():

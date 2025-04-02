@@ -97,30 +97,54 @@ db_connection = None
 
 bus = smbus.SMBus(1)
 
-# адреса контроллеров
-relay1_controller = RelayController(0x38)
-relay2_controller = RelayController(0x39)
 
-# соответствие портов контроллеров
-relay1_controller.set_bit(0)  # Открыть замок (K:IN1)
-relay1_controller.set_bit(1)  # Закрыть замок (K:IN2)
-relay1_controller.clear_bit(2)  # Зеленый светодиод (X:7)
-relay1_controller.clear_bit(3)  # Синий светодиод (X:8)
-relay1_controller.clear_bit(4)  # Красный светодиод (X:9)
-relay1_controller.set_bit(5)  # Группа - R2 (силовое реле) (KG0)
+def init_relay_controllers():
+    global relay1_controller, relay2_controller
+    
+    logger.info("Инициализация контроллеров реле...")
+    
+    # адреса контроллеров
+    relay1_controller = RelayController(0x38)  # PCA1
+    relay2_controller = RelayController(0x39)  # PCA2
 
-relay2_controller.set_bit(0)  # Аварийное освещение (KG1:IN1)
-relay2_controller.set_bit(1)  # Группа - R3 (свет) (KG1:IN2)
-relay2_controller.set_bit(2)  # Соленоиды (KG1:IN3)
-relay2_controller.set_bit(4)  # Радиатор1 (KG2:IN1)
-relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
-relay2_controller.set_bit(6)  # Бра левый1 (KG2:IN3)
-relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
+    # Маппинг для PCA1 (0x38)
+    relay_logger.info("Настройка PCA1 (0x38):")
+    relay1_controller.set_bit(0)  # Открыть замок (K:IN1)
+    relay_logger.info("- Бит 0: Открыть замок (K:IN1)")
+    relay1_controller.set_bit(1)  # Закрыть замок (K:IN2)
+    relay_logger.info("- Бит 1: Закрыть замок (K:IN2)")
+    relay1_controller.clear_bit(2)  # Зеленый светодиод (X:7)
+    relay_logger.info("- Бит 2: Зеленый светодиод (X:7)")
+    relay1_controller.clear_bit(3)  # Синий светодиод (X:8)
+    relay_logger.info("- Бит 3: Синий светодиод (X:8)")
+    relay1_controller.clear_bit(4)  # Красный светодиод (X:9)
+    relay_logger.info("- Бит 4: Красный светодиод (X:9)")
+    relay1_controller.set_bit(5)  # Группа - R2 (силовое реле) (KG0)
+    relay_logger.info("- Бит 5: Группа - R2 (силовое реле) (KG0)")
 
-data1 = bus.read_byte(0x38)
-data2 = bus.read_byte(0x39)
+    # Маппинг для PCA2 (0x39)
+    relay_logger.info("Настройка PCA2 (0x39):")
+    relay2_controller.set_bit(0)  # Аварийное освещение (KG1:IN1)
+    relay_logger.info("- Бит 0: Аварийное освещение (KG1:IN1)")
+    relay2_controller.set_bit(1)  # Группа - R3 (свет) (KG1:IN2)
+    relay_logger.info("- Бит 1: Группа - R3 (свет) (KG1:IN2)")
+    relay2_controller.set_bit(2)  # Соленоиды (KG1:IN3)
+    relay_logger.info("- Бит 2: Соленоиды (KG1:IN3)")
+    relay2_controller.set_bit(4)  # Радиатор1 (KG2:IN1)
+    relay_logger.info("- Бит 4: Радиатор1 (KG2:IN1)")
+    relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
+    relay_logger.info("- Бит 5: Свет спальня1 (KG2:IN2)")
+    relay2_controller.set_bit(6)  # Бра левый1 (KG2:IN3)
+    relay_logger.info("- Бит 6: Бра левый1 (KG2:IN3)")
+    relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
+    relay_logger.info("- Бит 7: Бра правый1 (KG2:IN4)")
 
-logger.info(str(bin(data1) + " " + bin(data2)))
+    data1 = bus.read_byte(0x38)
+    data2 = bus.read_byte(0x39)
+    logger.info(f"Начальное состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}")
+
+
+
 
 active_cards = {}
 logs = {}

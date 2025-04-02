@@ -16,6 +16,63 @@ from pin_controller import PinController
 from relaycontroller import RelayController
 from config import system_config, logger
 
+
+def setup_logging():
+    """Настройка системы логирования с форматированием и ротацией файлов"""
+    from logging.handlers import RotatingFileHandler
+    import os
+    
+    # Создаем директорию для логов, если ее нет
+    log_dir = "logs"
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    
+    # Настройка основного логгера
+    main_handler = RotatingFileHandler(
+        os.path.join(log_dir, 'main.log'), 
+        maxBytes=10*1024*1024,  # 10 MB
+        backupCount=5
+    )
+    main_formatter = logging.Formatter('%(asctime)s [%(levelname)s] - %(message)s')
+    main_handler.setFormatter(main_formatter)
+    
+    # Настройка логгера для событий реле
+    relay_handler = RotatingFileHandler(
+        os.path.join(log_dir, 'relay.log'), 
+        maxBytes=5*1024*1024,  # 5 MB
+        backupCount=3
+    )
+    relay_formatter = logging.Formatter('%(asctime)s - %(message)s')
+    relay_handler.setFormatter(relay_formatter)
+    
+    # Настройка логгера для событий карт
+    card_handler = RotatingFileHandler(
+        os.path.join(log_dir, 'cards.log'), 
+        maxBytes=5*1024*1024,  # 5 MB
+        backupCount=3
+    )
+    card_formatter = logging.Formatter('%(asctime)s - %(message)s')
+    card_handler.setFormatter(card_formatter)
+    
+    # Основной логгер
+    logger.setLevel(logging.INFO)
+    logger.addHandler(main_handler)
+    
+    # Создаем отдельные логгеры для разных типов событий
+    relay_logger = logging.getLogger('relay')
+    relay_logger.setLevel(logging.INFO)
+    relay_logger.addHandler(relay_handler)
+    
+    card_logger = logging.getLogger('card')
+    card_logger.setLevel(logging.INFO)
+    card_logger.addHandler(card_handler)
+    
+    return relay_logger, card_logger
+
+# Создаем дополнительные логгеры
+relay_logger, card_logger = setup_logging()
+
+
 door_just_closed = False
 can_open_the_door = False
 close_door_from_inside = False
@@ -47,9 +104,9 @@ relay2_controller = RelayController(0x39)
 # соответствие портов контроллеров
 relay1_controller.set_bit(0)  # Открыть замок (K:IN1)
 relay1_controller.set_bit(1)  # Закрыть замок (K:IN2)
-relay1_controller.set_bit(2)  # Зеленый светодиод (X:7)
-relay1_controller.set_bit(3)  # Синий светодиод (X:8)
-relay1_controller.set_bit(4)  # Красный светодиод (X:9)
+relay1_controller.clear_bit(2)  # Зеленый светодиод (X:7)
+relay1_controller.clear_bit(3)  # Синий светодиод (X:8)
+relay1_controller.clear_bit(4)  # Красный светодиод (X:9)
 relay1_controller.set_bit(5)  # Группа - R2 (силовое реле) (KG0)
 
 relay2_controller.set_bit(0)  # Аварийное освещение (KG1:IN1)
@@ -183,29 +240,30 @@ def timer_turn_everything_off(time_seconds):
 def turn_on(type = 1):
     global lighting_bl, lighting_br, lighting_main
     logger.info("Turn everything on")
-    relay2_controller.clear_bit(2)  # Соленоиды (KG1:IN3)
-    relay1_controller.clear_bit(5)  # Группа - R2 (KG0)
+    relay1_controller.clear_bit(5)  # Соленоиды (KG1:IN3)
+    relay2_controller.clear_bit(2)  # Группа - R2 (KG0)
     relay2_controller.clear_bit(1)  # Группа - R3 (свет) (KG1:IN2)
-    relay2_controller.clear_bit(4)
     #if type == 1:
     #   start_timer(timer_turn_everything_off)
 
 
 # GPIO_22 callback картоприемник
 def f_card_key(self):
-    logger.info("Card")
     global active_key, is_sold
-    print("Active", active_key)
-    try:
-        card_role = get_card_role(active_key)
-
-        logger.info(f"Role {card_role}")
-    except Exception:
-        pass
-    # if not is_sold:
-    #     if card_role == "Admin" or card_role == "Worker":
-    #         print("Включение для работника или админа")
-    turn_on()
+    card_logger.info("Сработал картоприемник")
+    
+    if active_key:
+        try:
+            card_role = get_card_role(active_key)
+            card_logger.info(f"Роль карты: {card_role}")
+            
+            if card_role:
+                logger.info(f"Включение устройств для роли: {card_role}")
+                turn_on()
+            else:
+                logger.info("Роль карты не определена")
+        except Exception as e:
+            logger.error(f"Ошибка при обработке карты: {str(e)}")
     # else:
     #     print("Выключение")
     #     turn_on(type=2)
@@ -500,16 +558,17 @@ def get_active_cards():
 
 @retry(tries=10, delay=1)
 def wait_rfid():
-    logger.info("Search key")
+    logger.info("Ожидание карты RFID...")
     rfid_port = serial.Serial('/dev/ttyS0', 9600)
     read_byte = (rfid_port.read(system_config.rfid_key_length)[1:11])
     key_ = read_byte.decode("utf-8")
     rfid_port.close()
     if key_:
-        logger.info("key catched {key} {datetime}".format(key=key_, datetime=datetime.utcnow()))
+        card_logger.info(f"Карта обнаружена: {key_} в {datetime.utcnow()}")
         return key_
     else:
-        logger.info(f"No key {key_}")
+        logger.warning("Карта не считана корректно")
+        return None
 
 
 @retry(tries=3, delay=5)
@@ -638,9 +697,9 @@ def cardreader_find():
     data1 = bus.read_byte(0x38)
     data2 = bus.read_byte(0x39)
 
-    logger.info(str(bin(data1) + " " + bin(data2)))
-    print(f"State for relay 1{bin(relay1_controller.get_state())}")
-    print(f"State for relay 2{bin(relay2_controller.get_state())}")
+    card_logger.debug(f"Состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}")
+    card_logger.debug(f"Состояние реле1: {bin(relay1_controller.get_state())}")
+    card_logger.debug(f"Состояние реле2: {bin(relay2_controller.get_state())}")
     if card_present:
         #print("Карта обнаружена")
         is_empty = False
@@ -672,54 +731,82 @@ def cardreader_find():
 
 def main():
     global room_controller, door_just_closed, active_key
-    print("Start main function")
-    #signal.signal(signal.SIGTERM, signal_handler)
-    #signal.signal(signal.SIGINT, signal_handler)
-
-    get_active_cards()
-    card_task = CheckActiveCardsTask(interval=timedelta(seconds=system_config.new_key_check_interval),
-                                     execute=get_active_cards)
-    card_task.start()
-
-    room_controller = init_room()
-
-    check_pins()
-    check_pin_task = CheckPinTask(interval=timedelta(seconds=system_config.check_pin_timeout), execute=check_pins)
-    check_pin_task.start()
-
-    cardreader_find()
-    cardreader_task = CheckCardTask(interval=timedelta(seconds=4), execute=cardreader_find)
-    cardreader_task.start()
-
-
-    while True:
-        try:
-            logger.info("Waiting for the key")
+    
+    try:
+        logger.info("=== ЗАПУСК СИСТЕМЫ УПРАВЛЕНИЯ КОМНАТОЙ ===")
+        logger.info(f"Номер комнаты: {system_config.room_number}")
+        
+        # Инициализация контроллеров реле
+        init_relay_controllers()
+        
+        # Получение активных карт
+        logger.info("Получение списка активных карт...")
+        get_active_cards()
+        logger.info(f"Найдено активных карт: {len(active_cards)}")
+        
+        # Запуск задачи проверки новых карт
+        logger.info(f"Запуск задачи проверки новых карт (интервал: {system_config.new_key_check_interval} сек)...")
+        card_task = CheckActiveCardsTask(interval=timedelta(seconds=system_config.new_key_check_interval),
+                                         execute=get_active_cards)
+        card_task.start()
+        logger.info("Задача проверки новых карт запущена")
+        
+        # Инициализация контроллеров пинов
+        logger.info("Инициализация пинов комнаты...")
+        room_controller = init_room()
+        logger.info("Пины комнаты инициализированы")
+        
+        # Проверка статуса пинов
+        check_pins()
+        logger.info(f"Запуск задачи проверки пинов (интервал: {system_config.check_pin_timeout} сек)...")
+        check_pin_task = CheckPinTask(interval=timedelta(seconds=system_config.check_pin_timeout), execute=check_pins)
+        check_pin_task.start()
+        logger.info("Задача проверки пинов запущена")
+        
+        # Запуск задачи проверки картоприемника
+        logger.info("Запуск задачи проверки картоприемника (интервал: 4 сек)...")
+        cardreader_find()
+        cardreader_task = CheckCardTask(interval=timedelta(seconds=4), execute=cardreader_find)
+        cardreader_task.start()
+        logger.info("Задача проверки картоприемника запущена")
+        
+        # Включаем устройства
+        logger.info("Включение устройств по умолчанию...")
+        turn_on()
+        logger.info("Устройства включены")
+        
+        logger.info("=== СИСТЕМА ГОТОВА К РАБОТЕ ===")
+        
+        # Основной цикл
+        while True:
+            logger.info("Ожидание ключа...")
             door_just_closed = False
-
+            
             entered_key = wait_rfid()
-            if entered_key in list(active_cards.keys()):
-                # TODO Refactor getting key from DB
-                active_key = active_cards[entered_key]
-                logger.info("Correct key! Please enter!")
-                permit_open_door()
-
-            else:
-                logger.info("Unknown key!")
-                for i in range(15):
-                    relay2_controller.set_bit(6)
-                    time.sleep(0.1)
-                    relay2_controller.clear_bit(6)
-                    time.sleep(0.1)
-                # if is_door_locked_from_inside():
-                #     relay2_controller.clear_bit(4)
-
-
-        except ProgramKilled:
-            logger.info("Program killed: running cleanup code")
-            card_task.stop()
-            check_pin_task.stop()
-            break
+            if entered_key:
+                if entered_key in list(active_cards.keys()):
+                    active_key = active_cards[entered_key]
+                    card_role = get_card_role(active_key)
+                    logger.info(f"Обнаружен корректный ключ, роль: {card_role}")
+                    logger.info("Открытие двери...")
+                    permit_open_door()
+                else:
+                    logger.warning(f"Обнаружен неизвестный ключ: {entered_key}")
+                    logger.info("Сигнализация о неизвестном ключе...")
+                    for i in range(15):
+                        relay1_controller.set_bit(4)  # Красный светодиод (X:9)
+                        time.sleep(0.1)
+                        relay1_controller.clear_bit(4)  # Красный светодиод (X:9)
+                        time.sleep(0.1)
+            
+    except ProgramKilled:
+        logger.info("Получен сигнал завершения программы, очистка...")
+        card_task.stop()
+        check_pin_task.stop()
+        cardreader_task.stop()
+        logger.info("Задачи остановлены")
+    except Exception as e:
+        logger.error(f"Критическая ошибка в основном цикле: {str(e)}")
 
 
 @app.on_event("startup")

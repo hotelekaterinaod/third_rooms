@@ -10,14 +10,14 @@ class RelayController:
         self.__bus = smbus.SMBus(bus_num)
         self.__state = '11111111'  # Начальное состояние (все биты установлены в 1)
         self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
-        print(f"Initial state for address {self.__address}: {bin(int(self.__state, 2))}")
+        print(f"Инициализация контроллера реле по адресу {hex(self.__address)}, начальное состояние: {bin(int(self.__state, 2))}")
 
     def set_state(self, state, delay=0.2):
         """
         Устанавливает полное состояние для всех битов сразу.
         """
         self.__state = f'{state:08b}'  # Преобразуем в двоичное строковое представление
-        print(f"Set full state {bin(int(self.__state, 2))} for address {self.__address}")
+        print(f"Установка состояния {bin(int(self.__state, 2))} для контроллера {hex(self.__address)}")
         self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
         time.sleep(delay)
 
@@ -29,7 +29,7 @@ class RelayController:
         state_list = list(self.__state)
         state_list[7 - bit] = '1'
         self.__state = ''.join(state_list)
-        print(f"Set bit {bit}, new state: {bin(int(self.__state, 2))}")
+        print(f"Установка бита {bit} для контроллера {hex(self.__address)}: {old_state} -> {self.__state}")
         self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
         time.sleep(delay)
 
@@ -37,11 +37,11 @@ class RelayController:
         """
         Сбрасывает конкретный бит в 0, обновляя состояние.
         """
-        print(f"Before clear bit {bit} for address {self.__address}: {self.__state}")
+        old_state = self.__state
         state_list = list(self.__state)
         state_list[7 - bit] = '0'  # Меняем бит на 0
         self.__state = ''.join(state_list)
-        print(f"Clear bit {bit}, new state: {bin(int(self.__state, 2))}")
+        print(f"Сброс бита {bit} для контроллера {hex(self.__address)}: {old_state} -> {self.__state}")
         self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
         time.sleep(delay)
 
@@ -49,10 +49,11 @@ class RelayController:
         """
         Переключает бит (вкл/выкл), обновляя состояние.
         """
+        old_state = self.__state
         state_list = list(self.__state)
         state_list[7 - bit] = '0' if state_list[7 - bit] == '1' else '1' # Инвертируем бит
         self.__state = ''.join(state_list)
-        print(f"Toggle bit {bit}, new state: {bin(int(self.__state, 2))}")
+        print(f"Переключение бита {bit} для контроллера {hex(self.__address)}: {old_state} -> {self.__state}")
         self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
         time.sleep(delay)
 
@@ -61,7 +62,6 @@ class RelayController:
         Проверяет состояние конкретного бита (0 или 1).
         """
         bit_state = self.__state[7 - bit]
-        print(f"Check bit {bit} for address {self.__address}: {bit_state}")
         return bit_state
 
     def get_state(self):

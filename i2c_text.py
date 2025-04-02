@@ -11,24 +11,24 @@ def test_relay_bit_operations():
     for bit in range(8):
         relay1_controller.clear_bit(bit)  # Выключаем бит
         print(f"Relay 1 cleared bit {bit}, current state: {bin(relay1_controller.get_state())}")
-        time.sleep(2)
+        time.sleep(10)
 
     for bit in range(8):
         relay1_controller.set_bit(bit)  # Включаем бит
         print(f"Relay 1 set bit {bit}, current state: {bin(relay1_controller.get_state())}")
-        time.sleep(2)
+        time.sleep(10)
 
     # Последовательное включение и выключение битов на реле 2
     print("Testing relay 2:")
     for bit in range(8):
         relay2_controller.clear_bit(bit)  # Выключаем бит
         print(f"Relay 2 cleared bit {bit}, current state: {bin(relay2_controller.get_state())}")
-        time.sleep(2)
+        time.sleep(10)
 
     for bit in range(8):
         relay2_controller.set_bit(bit)  # Включаем бит
         print(f"Relay 2 set bit {bit}, current state: {bin(relay2_controller.get_state())}")
-        time.sleep(2)
+        time.sleep(10)
 
 if __name__ == "__main__":
     # Запускаем тестовую программу для реле

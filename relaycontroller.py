@@ -25,7 +25,7 @@ class RelayController:
         """
         Устанавливает конкретный бит в 1, обновляя состояние.
         """
-        print(f"Before set bit {bit} for address {self.__address}: {self.__state}")
+        old_state = self.__state
         state_list = list(self.__state)
         state_list[7 - bit] = '1'
         self.__state = ''.join(state_list)

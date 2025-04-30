@@ -583,13 +583,16 @@ def get_active_cards():
 @retry(tries=10, delay=1)
 def wait_rfid():
     logger.info("Ожидание карты RFID...")
-    rfid_port = serial.Serial('/dev/ttyS0', 9600)
+    rfid_port = serial.Serial('/dev/ttyS0', 9600, timeout=1)
     read_byte = (rfid_port.read(system_config.rfid_key_length)[1:11])
     key_ = read_byte.decode("utf-8")
+    read_byte2 = rfid_port.read(system_config.rfid_key_length)
+    key_2 = read_byte2.decode("utf-8")
+
     rfid_port.close()
-    if key_:
+    if key_ or key_2:
         card_logger.info(f"Карта обнаружена: {key_} в {datetime.utcnow()}")
-        return key_
+        return key_ or key_2
     else:
         logger.warning("Карта не считана корректно")
         return None

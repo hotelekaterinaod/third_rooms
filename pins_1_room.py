@@ -811,7 +811,7 @@ def main():
                 if entered_key in list(active_cards.keys()):
                     active_key = active_cards[entered_key]
                     card_role = get_card_role(active_key)
-                    logger.info(f"Обнаружен корректный ключ, роль: {card_role}")
+                    logger.info(f"Обнаружен корректный ключ, роль: {card_role} {entered_key}")
                     logger.info("Открытие двери...")
                     permit_open_door()
                 else:

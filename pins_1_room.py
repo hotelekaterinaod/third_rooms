@@ -584,7 +584,7 @@ def get_active_cards():
 def wait_rfid():
     logger.info("Ожидание карты RFID...")
     rfid_port = serial.Serial('/dev/ttyS0', 9600, timeout=1)
-    read_byte = rfid_port.read(system_config.rfid_key_length)[1:11]
+    read_byte = rfid_port.read(system_config.rfid_key_length)[0:10]
     key_ = read_byte.decode("utf-8")
     rfid_port.close()
     if key_:

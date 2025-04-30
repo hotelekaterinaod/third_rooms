@@ -583,26 +583,32 @@ def get_active_cards():
 @retry(tries=10, delay=1)
 def wait_rfid():
     logger.info("Ожидание карты RFID...")
-
-    expected_length = 10
-    timeout_seconds = 2
-
     try:
-        with serial.Serial('/dev/ttyS0', 9600) as rfid_port:
-
-
-            read_data = rfid_port.read(expected_length)
-
-            if len(read_data) != expected_length:
-                logger.warning(f"Получено {len(read_data)} {read_data} байт из {expected_length}")
-                return None
-
-            key_ = read_data.decode("utf-8", errors="ignore")
+        # Увеличиваем таймаут
+        rfid_port = serial.Serial('/dev/ttyS0', 9600, timeout=2)
+        
+        # Очищаем буфер перед чтением
+        rfid_port.flushInput()
+        
+        # Получаем все доступные данные
+        read_byte = rfid_port.read(system_config.rfid_key_length)
+        
+        # Декодируем только если данные не пустые
+        if read_byte:
+            key_ = read_byte.decode("utf-8")
             card_logger.info(f"Карта обнаружена: {key_} в {datetime.utcnow()}")
+            rfid_port.close()
             return key_
-
+        else:
+            logger.warning("Карта не считана")
+            rfid_port.close()
+            return None
     except Exception as e:
-        logger.error(f"Ошибка при работе с RFID: {e}")
+        logger.error(f"Ошибка при чтении RFID: {str(e)}")
+        try:
+            rfid_port.close()
+        except:
+            pass
         return None
 
 

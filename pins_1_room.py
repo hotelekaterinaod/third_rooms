@@ -583,34 +583,68 @@ def get_active_cards():
 @retry(tries=10, delay=1)
 def wait_rfid():
     logger.info("Ожидание карты RFID...")
-    rfid_port = serial.Serial('/dev/ttyS0', 9600, timeout=1)
-    
-    # Считываем данные
-    read_byte = rfid_port.read(system_config.rfid_key_length)
-    
-    # Отладочный вывод байтов
-    logger.debug(f"Получены байты: {[hex(b) for b in read_byte]}")
-    
-    # Обрезаем и декодируем
-    key_bytes = read_byte[1:11]
-    logger.debug(f"Обрезанные байты: {[hex(b) for b in key_bytes]}")
-    
     try:
-        key_ = key_bytes.decode("utf-8")
-        logger.debug(f"Декодировано UTF-8: {key_}")
-    except UnicodeDecodeError:
-        # В случае ошибки декодирования используем hex
-        key_ = ''.join('{:02x}'.format(x) for x in key_bytes)
-        logger.debug(f"Декодировано HEX: {key_}")
-    
-    # Аналогично для второго чтения...
-    
-    rfid_port.close()
-    if key_:
-        card_logger.info(f"Карта обнаружена: {key_} в {datetime.utcnow()}")
-        return key_
-    else:
-        logger.warning("Карта не считана корректно")
+        # Настраиваем порт с более точными параметрами
+        rfid_port = serial.Serial(
+            port='/dev/ttyS0',  # Можно изменить на '/dev/ttyAMA0'
+            baudrate=9600,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=1
+        )
+        
+        # Очищаем буфер перед чтением
+        rfid_port.reset_input_buffer()
+        
+        # Считываем данные
+        read_byte = rfid_port.read(system_config.rfid_key_length)
+        logger.debug(f"Получены байты: {[hex(b) for b in read_byte]}")
+        
+        # Проверяем, что данные не пустые
+        if len(read_byte) < 11:
+            logger.warning(f"Получено недостаточно данных: {len(read_byte)} байт")
+            rfid_port.close()
+            return None
+        
+        # Используем только нужные байты (зависит от формата ключа)
+        # Возможно, нужно изменить индексы среза
+        key_bytes = read_byte[1:11]
+        logger.debug(f"Обрезанные байты: {[hex(b) for b in key_bytes]}")
+        
+        # Преобразуем в шестнадцатеричный формат (надежнее UTF-8)
+        key_hex = ''.join('{:02X}'.format(x) for x in key_bytes)
+        logger.debug(f"HEX формат: {key_hex}")
+        
+        # Попробуем декодировать в ASCII - только если все символы печатные
+        try:
+            key_ascii = ''.join(chr(x) if 32 <= x <= 126 else '' for x in key_bytes)
+            logger.debug(f"ASCII формат: {key_ascii}")
+        except Exception as e:
+            logger.debug(f"Ошибка ASCII декодирования: {e}")
+            key_ascii = ""
+        
+        # Выбираем формат, который больше соответствует ожидаемому
+        # Например, для ключа 3D004B905E нужен HEX формат
+        key_ = key_hex
+        
+        # Аналогичный код для второго чтения можно добавить при необходимости
+        key_2 = ""
+        
+        rfid_port.close()
+        
+        if key_:
+            card_logger.info(f"Карта обнаружена: {key_} в {datetime.utcnow()}")
+            return key_
+        else:
+            logger.warning("Карта не считана корректно")
+            return None
+    except Exception as e:
+        logger.error(f"Ошибка при считывании RFID: {e}")
+        try:
+            rfid_port.close()
+        except:
+            pass
         return None
 
 

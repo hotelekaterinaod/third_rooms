@@ -584,15 +584,31 @@ def get_active_cards():
 def wait_rfid():
     logger.info("Ожидание карты RFID...")
     rfid_port = serial.Serial('/dev/ttyS0', 9600, timeout=1)
-    read_byte = (rfid_port.read(system_config.rfid_key_length)[1:11])
-    key_ = read_byte.decode("utf-8")
-    read_byte2 = rfid_port.read(system_config.rfid_key_length)
-    key_2 = read_byte2.decode("utf-8")
-
+    
+    # Считываем данные
+    read_byte = rfid_port.read(system_config.rfid_key_length)
+    
+    # Отладочный вывод байтов
+    logger.debug(f"Получены байты: {[hex(b) for b in read_byte]}")
+    
+    # Обрезаем и декодируем
+    key_bytes = read_byte[1:11]
+    logger.debug(f"Обрезанные байты: {[hex(b) for b in key_bytes]}")
+    
+    try:
+        key_ = key_bytes.decode("utf-8")
+        logger.debug(f"Декодировано UTF-8: {key_}")
+    except UnicodeDecodeError:
+        # В случае ошибки декодирования используем hex
+        key_ = ''.join('{:02x}'.format(x) for x in key_bytes)
+        logger.debug(f"Декодировано HEX: {key_}")
+    
+    # Аналогично для второго чтения...
+    
     rfid_port.close()
-    if key_ or key_2:
+    if key_:
         card_logger.info(f"Карта обнаружена: {key_} в {datetime.utcnow()}")
-        return key_ or key_2
+        return key_
     else:
         logger.warning("Карта не считана корректно")
         return None

@@ -588,22 +588,16 @@ def wait_rfid():
     timeout_seconds = 2
 
     try:
-        with serial.Serial('/dev/ttyS0', 9600, timeout=0.1) as rfid_port:
-            buffer = b''
-            start_time = time.time()
+        with serial.Serial('/dev/ttyS0', 9600) as rfid_port:
 
-            while len(buffer) < expected_length:
-                if time.time() - start_time > timeout_seconds:
-                    logger.warning(f"Время ожидания RFID истекло. Получено {len(buffer)} байт.")
-                    return None
 
-                bytes_available = rfid_port.in_waiting
-                if bytes_available:
-                    buffer += rfid_port.read(bytes_available)
-                else:
-                    time.sleep(0.05)
+            read_data = rfid_port.read(expected_length)
 
-            key_ = buffer[:expected_length].decode("utf-8", errors="ignore")
+            if len(read_data) != expected_length:
+                logger.warning(f"Получено {len(read_data)} {read_data} байт из {expected_length}")
+                return None
+
+            key_ = read_data.decode("utf-8", errors="ignore")
             card_logger.info(f"Карта обнаружена: {key_} в {datetime.utcnow()}")
             return key_
 

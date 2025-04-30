@@ -12,6 +12,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Правильные номера GPIO пинов в режиме BCM
+VALID_GPIO_PINS = [
+    2, 3, 4,    # GPIO2, GPIO3, GPIO4
+    17, 27, 22, # GPIO17, GPIO27, GPIO22
+    10, 9, 11,  # GPIO10, GPIO9, GPIO11
+    5, 6, 13,   # GPIO5, GPIO6, GPIO13
+    19, 26,     # GPIO19, GPIO26
+    14, 15, 18, # GPIO14, GPIO15, GPIO18
+    23, 24, 25, # GPIO23, GPIO24, GPIO25
+    8, 7, 12,   # GPIO8, GPIO7, GPIO12
+    16, 20, 21  # GPIO16, GPIO20, GPIO21
+]
+
 class PinControllerTest:
     """
     Тестовая версия класса PinController для отладки проблем с GPIO
@@ -25,7 +38,7 @@ class PinControllerTest:
         self.before_callback = before_callback
         self.state = None
         
-        logger.info(f"Инициализация пина {pin}")
+        logger.info(f"Инициализация пина GPIO{pin}")
         logger.info(f"Параметры: react_on={react_on}, up_down={up_down}, bouncetime={bouncetime}")
         
         try:
@@ -35,19 +48,18 @@ class PinControllerTest:
             
             # Настройка пина как вход
             GPIO.setup(self.pin, GPIO.IN, pull_up_down=self.up_down)
-            logger.info(f"Пин {pin} успешно настроен как INPUT")
+            logger.info(f"Пин GPIO{pin} успешно настроен как INPUT")
             
             # Чтение начального состояния
             self.state = GPIO.input(self.pin)
-            logger.info(f"Начальное состояние пина {pin}: {self.state}")
+            logger.info(f"Начальное состояние пина GPIO{pin}: {self.state}")
             
             # Добавление обработчика событий, если указан callback
             if self.callback:
                 self._add_event_detection()
-                logger.info(f"Обработчик событий для пина {pin} добавлен успешно")
         
         except Exception as e:
-            logger.error(f"Ошибка при инициализации пина {pin}: {str(e)}")
+            logger.error(f"Ошибка при инициализации пина GPIO{pin}: {str(e)}")
             raise
     
     def _add_event_detection(self):
@@ -58,7 +70,7 @@ class PinControllerTest:
             # Попытка удалить существующие обработчики (если есть)
             try:
                 GPIO.remove_event_detect(self.pin)
-                logger.info(f"Удален существующий обработчик для пина {self.pin}")
+                logger.info(f"Удален существующий обработчик для пина GPIO{self.pin}")
             except:
                 pass
             
@@ -77,11 +89,11 @@ class PinControllerTest:
                 
                 GPIO.add_event_detect(self.pin, self.react_on, callback=wrapped_callback, bouncetime=self.bouncetime)
             
-            logger.info(f"Обработчик событий добавлен для пина {self.pin}")
+            logger.info(f"Обработчик событий для пина GPIO{self.pin} добавлен успешно")
             return True
         
         except Exception as e:
-            logger.error(f"Ошибка при добавлении обработчика событий для пина {self.pin}: {str(e)}")
+            logger.error(f"Ошибка при добавлении обработчика событий для пина GPIO{self.pin}: {str(e)}")
             return False
     
     def check_pin(self):
@@ -93,20 +105,25 @@ class PinControllerTest:
             self.state = GPIO.input(self.pin)
             
             if old_state != self.state:
-                logger.info(f"Изменено состояние пина {self.pin}: {old_state} -> {self.state}")
+                logger.info(f"Изменено состояние пина GPIO{self.pin}: {old_state} -> {self.state}")
             
             return self.state
         except Exception as e:
-            logger.error(f"Ошибка при проверке состояния пина {self.pin}: {str(e)}")
+            logger.error(f"Ошибка при проверке состояния пина GPIO{self.pin}: {str(e)}")
             return None
 
 def dummy_callback(self):
     """Заглушка для колбэка"""
-    logger.info(f"Вызван колбэк для пина {self.pin}")
+    logger.info(f"Вызван колбэк для пина GPIO{self.pin}")
 
 def test_pin(pin_number):
     """Тестирует пин с использованием PinControllerTest"""
     try:
+        # Проверка валидности GPIO пина
+        if pin_number not in VALID_GPIO_PINS:
+            logger.error(f"GPIO{pin_number} не является допустимым GPIO пином в режиме BCM")
+            return False
+            
         pin_controller = PinControllerTest(
             pin=pin_number,
             callback=dummy_callback,
@@ -115,38 +132,41 @@ def test_pin(pin_number):
             bouncetime=300
         )
         
-        logger.info(f"PinControllerTest для пина {pin_number} успешно создан")
+        logger.info(f"PinControllerTest для пина GPIO{pin_number} успешно создан")
         
         # Проверяем состояние пина
         state = pin_controller.check_pin()
-        logger.info(f"Текущее состояние пина {pin_number}: {state}")
+        logger.info(f"Текущее состояние пина GPIO{pin_number}: {state}")
         
-        logger.info(f"Тест пина {pin_number} завершен успешно")
+        logger.info(f"Тест пина GPIO{pin_number} завершен успешно")
         return True
     
     except Exception as e:
-        logger.error(f"Тест пина {pin_number} завершен с ошибкой: {str(e)}")
+        logger.error(f"Тест пина GPIO{pin_number} завершен с ошибкой: {str(e)}")
         return False
 
 def main():
     """Основная функция"""
+    GPIO.cleanup()  # Очистка перед началом тестов
+    
     if len(sys.argv) > 1:
         try:
             pin_to_test = int(sys.argv[1])
-            logger.info(f"Тестирование пина {pin_to_test}")
+            logger.info(f"Тестирование пина GPIO{pin_to_test}")
             test_pin(pin_to_test)
         except ValueError:
             logger.error(f"{sys.argv[1]} не является числом")
     else:
-        # Тестируем все пины, которые упомянуты в вашем коде
-        test_pins = [1, 7, 8, 10, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+        # Тестируем корректные GPIO пины в режиме BCM
+        # Выберем несколько пинов для теста
+        test_pins = [17, 27, 22, 10, 9, 11, 5, 6, 13, 19, 26]
         logger.info(f"Тестирование {len(test_pins)} пинов")
         
         success_count = 0
         failed_pins = []
         
         for pin in test_pins:
-            logger.info(f"\n=== Тестирование пина {pin} ===")
+            logger.info(f"\n=== Тестирование пина GPIO{pin} ===")
             if test_pin(pin):
                 success_count += 1
             else:

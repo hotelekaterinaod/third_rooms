@@ -17,7 +17,12 @@ import os
 from pin_controller import PinController
 from relaycontroller import RelayController
 from config import system_config, logger
-from test import ProgramKilled
+
+
+
+class ProgramKilled(Exception):
+    pass
+
 
 def setup_logging():
     """Настройка системы логирования с форматированием и ротацией файлов"""

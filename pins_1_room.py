@@ -15,7 +15,7 @@ import os
 
 # Импорт обновленных контроллеров
 from pin_controller import PinController
-from relaycontroller import RelayController
+from relaycontroller import I2C_LOCK, RelayController
 from config import system_config, logger
 
 
@@ -108,63 +108,109 @@ relay1_controller = None  # PCA1
 relay2_controller = None  # PCA2
 relay3_controller = None  # PCA3 (новое реле)
 
+def check_i2c_devices():
+    """
+    Проверяет наличие I2C устройств на шине
+    
+    :return: Список доступных адресов устройств
+    """
+    available = []
+    try:
+        for addr in [0x38, 0x39, 0x3b]:
+            try:
+                with I2C_LOCK:
+                    bus.read_byte(addr)
+                available.append(addr)
+                time.sleep(0.1)  # Задержка для стабильности
+            except Exception:
+                pass
+    except Exception as e:
+        logger.error(f"Ошибка при проверке I2C устройств: {str(e)}")
+    
+    return available
+
 def init_relay_controllers():
     global relay1_controller, relay2_controller, relay3_controller
     
     logger.info("Инициализация контроллеров реле...")
+
+    available_devices = check_i2c_devices()
+    logger.info(f"Доступные I2C устройства: {available_devices}")
     
-    # Адреса контроллеров
-    relay1_controller = RelayController(0x38)  # PCA1
-    relay2_controller = RelayController(0x39)  # PCA2
-    relay3_controller = RelayController(0x3b)  # PCA3 (новый контроллер)
-
-    # Маппинг для PCA1 (0x38)
-    relay_logger.info("Настройка PCA1 (0x38):")
-    relay1_controller.set_bit(0)  # Открыть замок (K:IN1)
-    relay_logger.info("- Бит 0: Открыть замок (K:IN1)")
-    relay1_controller.set_bit(1)  # Закрыть замок (K:IN2)
-    relay_logger.info("- Бит 1: Закрыть замок (K:IN2)")
-    relay1_controller.clear_bit(2)  # Зеленый светодиод (X:7)
-    relay_logger.info("- Бит 2: Зеленый светодиод (X:7)")
-    relay1_controller.clear_bit(3)  # Синий светодиод (X:8)
-    relay_logger.info("- Бит 3: Синий светодиод (X:8)")
-    relay1_controller.clear_bit(4)  # Красный светодиод (X:9)
-    relay_logger.info("- Бит 4: Красный светодиод (X:9)")
-    relay1_controller.set_bit(5)  # Группа - R2 (силовое реле) (KG0)
-    relay_logger.info("- Бит 5: Группа - R2 (силовое реле) (KG0)")
-
-    # Маппинг для PCA2 (0x39)
-    relay_logger.info("Настройка PCA2 (0x39):")
-    relay2_controller.set_bit(0)  # Аварийное освещение (KG1:IN1)
-    relay_logger.info("- Бит 0: Аварийное освещение (KG1:IN1)")
-    relay2_controller.set_bit(1)  # Группа - R3 (свет) (KG1:IN2)
-    relay_logger.info("- Бит 1: Группа - R3 (свет) (KG1:IN2)")
-    relay2_controller.set_bit(2)  # Соленоиды (KG1:IN3)
-    relay_logger.info("- Бит 2: Соленоиды (KG1:IN3)")
-    relay2_controller.set_bit(4)  # Радиатор1 (KG2:IN1)
-    relay_logger.info("- Бит 4: Радиатор1 (KG2:IN1)")
-    relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
-    relay_logger.info("- Бит 5: Свет спальня1 (KG2:IN2)")
-    relay2_controller.set_bit(6)  # Бра левый1 (KG2:IN3)
-    relay_logger.info("- Бит 6: Бра левый1 (KG2:IN3)")
-    relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
-    relay_logger.info("- Бит 7: Бра правый1 (KG2:IN4)")
+    relay1_controller = None
+    relay2_controller = None
+    relay3_controller = None
     
-    # Маппинг для PCA3 (0x40) - нового контроллера
-    relay_logger.info("Настройка PCA3 (0x40):")
-    relay3_controller.set_bit(0)  # Радиатор2 (KG3:IN1)
-    relay_logger.info("- Бит 0: Радиатор2 (KG3:IN1)")
-    relay3_controller.set_bit(1)  # Свет спальня2 (KG3:IN2)
-    relay_logger.info("- Бит 1: Свет спальня2 (KG3:IN2)")
-    relay3_controller.set_bit(2)  # Бра левый2 (KG3:IN3)
-    relay_logger.info("- Бит 2: Бра левый2 (KG3:IN3)")
-    relay3_controller.set_bit(3)  # Бра правый2 (KG3:IN4)
-    relay_logger.info("- Бит 3: Бра правый2 (KG3:IN4)")
+    # Адреса контроллеро
+    if 0x38 in available_devices:
+        relay1_controller = RelayController(0x38, retry_attempts=3, delay=0.1)
 
-    data1 = bus.read_byte(0x38)
-    data2 = bus.read_byte(0x39)
-    data3 = bus.read_byte(0x3b)
-    logger.info(f"Начальное состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}, PCA3={bin(data3)}")
+        # Маппинг для PCA1 (0x38)
+        relay_logger.info("Настройка PCA1 (0x38):")
+        relay1_controller.set_bit(0)  # Открыть замок (K:IN1)
+        relay_logger.info("- Бит 0: Открыть замок (K:IN1)")
+        relay1_controller.set_bit(1)  # Закрыть замок (K:IN2)
+        relay_logger.info("- Бит 1: Закрыть замок (K:IN2)")
+        relay1_controller.clear_bit(2)  # Зеленый светодиод (X:7)
+        relay_logger.info("- Бит 2: Зеленый светодиод (X:7)")
+        relay1_controller.clear_bit(3)  # Синий светодиод (X:8)
+        relay_logger.info("- Бит 3: Синий светодиод (X:8)")
+        relay1_controller.clear_bit(4)  # Красный светодиод (X:9)
+        relay_logger.info("- Бит 4: Красный светодиод (X:9)")
+        relay1_controller.set_bit(5)  # Группа - R2 (силовое реле) (KG0)
+        relay_logger.info("- Бит 5: Группа - R2 (силовое реле) (KG0)")
+    else:
+        logger.warning("Контроллер реле по адресу 0x38 не обнаружен!")
+
+
+    if 0x39 in available_devices:
+        relay2_controller = RelayController(0x39, retry_attempts=3, delay=0.1)
+        # Маппинг для PCA2 (0x39)
+        relay_logger.info("Настройка PCA2 (0x39):")
+        relay2_controller.set_bit(0)  # Аварийное освещение (KG1:IN1)
+        relay_logger.info("- Бит 0: Аварийное освещение (KG1:IN1)")
+        relay2_controller.set_bit(1)  # Группа - R3 (свет) (KG1:IN2)
+        relay_logger.info("- Бит 1: Группа - R3 (свет) (KG1:IN2)")
+        relay2_controller.set_bit(2)  # Соленоиды (KG1:IN3)
+        relay_logger.info("- Бит 2: Соленоиды (KG1:IN3)")
+        relay2_controller.set_bit(4)  # Радиатор1 (KG2:IN1)
+        relay_logger.info("- Бит 4: Радиатор1 (KG2:IN1)")
+        relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
+        relay_logger.info("- Бит 5: Свет спальня1 (KG2:IN2)")
+        relay2_controller.set_bit(6)  # Бра левый1 (KG2:IN3)
+        relay_logger.info("- Бит 6: Бра левый1 (KG2:IN3)")
+        relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
+        relay_logger.info("- Бит 7: Бра правый1 (KG2:IN4)")
+    else:
+        logger.warning("Контроллер реле по адресу 0x39 не обнаружен!")
+    
+    if 0x3b in available_devices:
+        relay3_controller = RelayController(0x3b, retry_attempts=3, delay=0.1)
+        relay_logger.info("Настройка PCA3 (0x40):")
+        relay3_controller.set_bit(0)  # Радиатор2 (KG3:IN1)
+        relay_logger.info("- Бит 0: Радиатор2 (KG3:IN1)")
+        relay3_controller.set_bit(1)  # Свет спальня2 (KG3:IN2)
+        relay_logger.info("- Бит 1: Свет спальня2 (KG3:IN2)")
+        relay3_controller.set_bit(2)  # Бра левый2 (KG3:IN3)
+        relay_logger.info("- Бит 2: Бра левый2 (KG3:IN3)")
+        relay3_controller.set_bit(3)  # Бра правый2 (KG3:IN4)
+        relay_logger.info("- Бит 3: Бра правый2 (KG3:IN4)")
+    else:
+        logger.warning("Контроллер реле по адресу 0x3b не обнаружен!")
+
+    if relay1_controller:
+        status1 = relay1_controller.__read_with_retry()
+        logger.info(f"Состояние контроллера 1: {bin(status1) if status1 is not None else 'Ошибка чтения'}")
+    
+    if relay2_controller:
+        status2 = relay2_controller.__read_with_retry()
+        logger.info(f"Состояние контроллера 2: {bin(status2) if status2 is not None else 'Ошибка чтения'}")
+    
+    if relay3_controller:
+        status3 = relay3_controller.__read_with_retry()
+        logger.info(f"Состояние контроллера 3: {bin(status3) if status3 is not None else 'Ошибка чтения'}")
+
+
 
 # Остальные функции остаются такими же, как в вашем original файле...
 
@@ -610,6 +656,19 @@ def check_pins():
 
 
 def signal_handler(signum, frame):
+    logger.info("Получен сигнал завершения, остановка всех потоков...")
+    # Устанавливаем флаг завершения для всех потоков
+    for controller in room_controller.values():
+        if controller:
+            controller.running = False
+
+    # Ожидаем завершения потоков
+    time.sleep(1)
+    
+    # Освобождаем GPIO
+    logger.info("Очистка GPIO...")
+    GPIO.cleanup()
+    
     raise ProgramKilled
 
 
@@ -845,6 +904,28 @@ def main():
             GPIO.cleanup()
         except:
             pass
+    finally:
+        logger.info("Завершение всех задач...")
+        
+        # Остановка всех потоков мониторинга пинов
+        for pin_ctrl in room_controller.values():
+            if pin_ctrl:
+                pin_ctrl.running = False
+        
+        # Остановка фоновых задач
+        if card_task:
+            card_task.stop()
+        if check_pin_task:
+            check_pin_task.stop()
+        if cardreader_task:
+            cardreader_task.stop()
+        
+        # Задержка для завершения потоков
+        time.sleep(1)
+        
+        # Очистка GPIO в конце
+        logger.info("Очистка GPIO...")
+        GPIO.cleanup()
 
 
 @app.on_event("startup")

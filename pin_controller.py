@@ -1,8 +1,12 @@
-import RPi.GPIO as GPIO
-import threading
+
 import time
 import logging
 from config import logger
+import RPi.GPIO as GPIO
+import threading
+
+
+GPIO_LOCK = threading.RLock()
 
 class PinController:
     def __init__(self, pin, callback=None, up_down=GPIO.PUD_UP, react_on=GPIO.BOTH, before_callback=None, bouncetime=0.3):
@@ -16,6 +20,11 @@ class PinController:
         :param before_callback: Функция обратного вызова перед основным callback
         :param bouncetime: Время для подавления дребезга контактов в секундах (было в мс, теперь в сек)
         """
+        with GPIO_LOCK:
+            if not hasattr(GPIO, '_mode_set'):
+                GPIO.setmode(GPIO.BCM)
+                GPIO.setwarnings(False)  # Отключаем предупреждения
+                setattr(GPIO, '_mode_set', True)
         # Валидация пина
         self.pin = self._validate_pin(pin)
         self.callback = callback if callback else self._dummy_callback
@@ -78,29 +87,35 @@ class PinController:
         last_time = time.time()
         
         while self.running:
-            current_state = GPIO.input(self.pin)
-            current_time = time.time()
-            
-            # Если состояние изменилось и прошло достаточно времени (для дребезга)
-            if current_state != self.last_state and (current_time - last_time) > self.bounce_time:
-                # Проверка на тип события
-                if (self.react_on == GPIO.BOTH or 
-                    (self.react_on == GPIO.RISING and current_state == 1) or 
-                    (self.react_on == GPIO.FALLING and current_state == 0)):
+            try:
+                with GPIO_LOCK:
+                    current_state = GPIO.input(self.pin)
+                    current_state = GPIO.input(self.pin)
+                    current_time = time.time()
                     
-                    self.state = current_state
-                    # Вызов before_callback
-                    self.before_callback(self)
-                    # Вызов основного callback
-                    self.callback(self)
+                    # Если состояние изменилось и прошло достаточно времени (для дребезга)
+                    if current_state != self.last_state and (current_time - last_time) > self.bounce_time:
+                        # Проверка на тип события
+                        if (self.react_on == GPIO.BOTH or 
+                            (self.react_on == GPIO.RISING and current_state == 1) or 
+                            (self.react_on == GPIO.FALLING and current_state == 0)):
+                            
+                            self.state = current_state
+                            # Вызов before_callback
+                            self.before_callback(self)
+                            # Вызов основного callback
+                            self.callback(self)
+                            
+                            logger.info(f"Изменение на пине GPIO{self.pin}: {current_state}")
+                        
+                        self.last_state = current_state
+                        last_time = current_time
                     
-                    logger.info(f"Изменение на пине GPIO{self.pin}: {current_state}")
-                
-                self.last_state = current_state
-                last_time = current_time
-            
-            # Небольшая задержка для уменьшения нагрузки на CPU
-            time.sleep(0.01)
+                    # Небольшая задержка для уменьшения нагрузки на CPU
+                    time.sleep(0.01)
+            except Exception as e:
+                logger.error(f"Ошибка при мониторинге пина {self.pin}: {str(e)}")
+                time.sleep(0.1)
     
     def check_pin(self):
         """Проверка текущего состояния пина"""
@@ -116,5 +131,8 @@ class PinController:
     
     def cleanup(self):
         """Освободить ресурсы"""
+        self.running = False
+        if self.thread:
+            self.thread.join(1.0)
         self.stop_monitoring()
         # Не очищаем GPIO здесь, чтобы другие контроллеры могли использовать его

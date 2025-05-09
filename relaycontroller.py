@@ -1,5 +1,7 @@
 import smbus
 import time
+import logging
+from config import logger
 
 class RelayController:
     def __init__(self, address, bus_num=1):
@@ -8,65 +10,83 @@ class RelayController:
         """
         self.__address = address
         self.__bus = smbus.SMBus(bus_num)
-        self.__state = '11111111'  # Начальное состояние (все биты установлены в 1)
-        self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
-        print(f"Инициализация контроллера реле по адресу {hex(self.__address)}, начальное состояние: {bin(int(self.__state, 2))}")
-
-    def set_state(self, state, delay=0.2):
+        self.__state = 0xFF  # Начальное состояние (все биты установлены в 1, в десятичном формате)
+        
+        try:
+            self.__bus.write_byte_data(self.__address, 0x09, self.__state)
+            logger.info(f"Инициализация контроллера реле по адресу {hex(self.__address)}, начальное состояние: {bin(self.__state)}")
+        except Exception as e:
+            logger.error(f"Ошибка при инициализации контроллера реле {hex(self.__address)}: {str(e)}")
+            raise
+    
+    def set_state(self, state, delay=0.1):
         """
         Устанавливает полное состояние для всех битов сразу.
         """
-        self.__state = f'{state:08b}'  # Преобразуем в двоичное строковое представление
-        print(f"Установка состояния {bin(int(self.__state, 2))} для контроллера {hex(self.__address)}")
-        self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
-        time.sleep(delay)
-
-    def set_bit(self, bit, delay=0.2):
+        try:
+            old_state = self.__state
+            self.__state = state
+            logger.info(f"Установка состояния для контроллера {hex(self.__address)}: {bin(old_state)} -> {bin(self.__state)}")
+            self.__bus.write_byte_data(self.__address, 0x09, self.__state)
+            time.sleep(delay)
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при установке состояния для контроллера {hex(self.__address)}: {str(e)}")
+            return False
+    
+    def set_bit(self, bit, delay=0.1):
         """
         Устанавливает конкретный бит в 1, обновляя состояние.
         """
-        old_state = self.__state
-        state_list = list(self.__state)
-        state_list[7 - bit] = '1'
-        self.__state = ''.join(state_list)
-        print(f"Установка бита {bit} для контроллера {hex(self.__address)}: {old_state} -> {self.__state}")
-        self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
-        time.sleep(delay)
-
-    def clear_bit(self, bit, delay=0.2):
+        try:
+            old_state = self.__state
+            self.__state |= (1 << bit)  # Устанавливаем бит в 1
+            logger.info(f"Установка бита {bit} для контроллера {hex(self.__address)}: {bin(old_state)} -> {bin(self.__state)}")
+            self.__bus.write_byte_data(self.__address, 0x09, self.__state)
+            time.sleep(delay)
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при установке бита {bit} для контроллера {hex(self.__address)}: {str(e)}")
+            return False
+    
+    def clear_bit(self, bit, delay=0.1):
         """
         Сбрасывает конкретный бит в 0, обновляя состояние.
         """
-        old_state = self.__state
-        state_list = list(self.__state)
-        state_list[7 - bit] = '0'  # Меняем бит на 0
-        self.__state = ''.join(state_list)
-        print(f"Сброс бита {bit} для контроллера {hex(self.__address)}: {old_state} -> {self.__state}")
-        self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
-        time.sleep(delay)
-
-    def toggle_bit(self, bit, delay=0.2):
+        try:
+            old_state = self.__state
+            self.__state &= ~(1 << bit)  # Сбрасываем бит в 0
+            logger.info(f"Сброс бита {bit} для контроллера {hex(self.__address)}: {bin(old_state)} -> {bin(self.__state)}")
+            self.__bus.write_byte_data(self.__address, 0x09, self.__state)
+            time.sleep(delay)
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при сбросе бита {bit} для контроллера {hex(self.__address)}: {str(e)}")
+            return False
+    
+    def toggle_bit(self, bit, delay=0.1):
         """
         Переключает бит (вкл/выкл), обновляя состояние.
         """
-        old_state = self.__state
-        state_list = list(self.__state)
-        state_list[7 - bit] = '0' if state_list[7 - bit] == '1' else '1' # Инвертируем бит
-        self.__state = ''.join(state_list)
-        print(f"Переключение бита {bit} для контроллера {hex(self.__address)}: {old_state} -> {self.__state}")
-        self.__bus.write_byte_data(self.__address, 0x09, int(self.__state, 2))
-        time.sleep(delay)
-
+        try:
+            old_state = self.__state
+            self.__state ^= (1 << bit)  # Инвертируем бит
+            logger.info(f"Переключение бита {bit} для контроллера {hex(self.__address)}: {bin(old_state)} -> {bin(self.__state)}")
+            self.__bus.write_byte_data(self.__address, 0x09, self.__state)
+            time.sleep(delay)
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при переключении бита {bit} для контроллера {hex(self.__address)}: {str(e)}")
+            return False
+    
     def check_bit(self, bit):
         """
         Проверяет состояние конкретного бита (0 или 1).
         """
-        bit_state = self.__state[7 - bit]
-        return bit_state
-
+        return 1 if (self.__state & (1 << bit)) else 0
+    
     def get_state(self):
         """
         Возвращает текущее состояние всех битов в виде целого числа.
-
         """
-        return int(self.__state, 2)  # Преобразуем строку в число
+        return self.__state

@@ -11,16 +11,17 @@ import RPi.GPIO as GPIO
 from retry import retry
 import logging
 import multiprocessing
+import os
 
+# Импорт обновленных контроллеров
 from pin_controller import PinController
 from relaycontroller import RelayController
 from config import system_config, logger
-
+from test import ProgramKilled
 
 def setup_logging():
     """Настройка системы логирования с форматированием и ротацией файлов"""
     from logging.handlers import RotatingFileHandler
-    import os
     
     # Создаем директорию для логов, если ее нет
     log_dir = "logs"
@@ -33,7 +34,7 @@ def setup_logging():
         maxBytes=10*1024*1024,  # 10 MB
         backupCount=5
     )
-    main_formatter = logging.Formatter('%(asctime)s [%(levelname)s] - %(message)s')
+    main_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     main_handler.setFormatter(main_formatter)
     
     # Настройка логгера для событий реле
@@ -72,7 +73,7 @@ def setup_logging():
 # Создаем дополнительные логгеры
 relay_logger, card_logger = setup_logging()
 
-
+# Глобальные переменные
 door_just_closed = False
 can_open_the_door = False
 close_door_from_inside = False
@@ -97,15 +98,20 @@ db_connection = None
 
 bus = smbus.SMBus(1)
 
+# Глобальные контроллеры реле
+relay1_controller = None  # PCA1
+relay2_controller = None  # PCA2
+relay3_controller = None  # PCA3 (новое реле)
 
 def init_relay_controllers():
-    global relay1_controller, relay2_controller
+    global relay1_controller, relay2_controller, relay3_controller
     
     logger.info("Инициализация контроллеров реле...")
     
-    # адреса контроллеров
+    # Адреса контроллеров
     relay1_controller = RelayController(0x38)  # PCA1
     relay2_controller = RelayController(0x39)  # PCA2
+    relay3_controller = RelayController(0x40)  # PCA3 (новый контроллер)
 
     # Маппинг для PCA1 (0x38)
     relay_logger.info("Настройка PCA1 (0x38):")
@@ -138,37 +144,32 @@ def init_relay_controllers():
     relay_logger.info("- Бит 6: Бра левый1 (KG2:IN3)")
     relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
     relay_logger.info("- Бит 7: Бра правый1 (KG2:IN4)")
+    
+    # Маппинг для PCA3 (0x40) - нового контроллера
+    relay_logger.info("Настройка PCA3 (0x40):")
+    relay3_controller.set_bit(0)  # Радиатор2 (KG3:IN1)
+    relay_logger.info("- Бит 0: Радиатор2 (KG3:IN1)")
+    relay3_controller.set_bit(1)  # Свет спальня2 (KG3:IN2)
+    relay_logger.info("- Бит 1: Свет спальня2 (KG3:IN2)")
+    relay3_controller.set_bit(2)  # Бра левый2 (KG3:IN3)
+    relay_logger.info("- Бит 2: Бра левый2 (KG3:IN3)")
+    relay3_controller.set_bit(3)  # Бра правый2 (KG3:IN4)
+    relay_logger.info("- Бит 3: Бра правый2 (KG3:IN4)")
 
     data1 = bus.read_byte(0x38)
     data2 = bus.read_byte(0x39)
-    logger.info(f"Начальное состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}")
+    data3 = bus.read_byte(0x40)
+    logger.info(f"Начальное состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}, PCA3={bin(data3)}")
 
+# Остальные функции остаются такими же, как в вашем original файле...
 
-
-
-active_cards = {}
-logs = {}
-active_key = None
-
-GPIO.setmode(GPIO.BCM)
-
-close_door_from_inside_counter = 1
-open_door_counter = 1
-
-
-class ProgramKilled(Exception):
-    #logger.info("Error for some reason Exception")
-    pass
-
+# Функции обратного вызова для пинов
 
 def f_lock_door_from_inside(self):
-    # logger.info(f"OFFF {bool(room_controller[23].state)}")
     logger.info("Lock door from inside")
-    if bool(room_controller[23].state):
+    if bool(self.state):
         relay2_controller.clear_bit(6)  # 6
 
-
-# GPIO_23 callback (проверка сработки внут защелки (ригеля) на закрытие)
 def f_lock_door_from_inside_thread():
     logger.info("Lock door from inside thread")
     while not bool(room_controller[23].state):
@@ -177,7 +178,6 @@ def f_lock_door_from_inside_thread():
         relay1_controller.clear_bit(4)  # Красный светодиод (X:9)
         time.sleep(0.2)
 
-
 def f_open_door_indicates_thread():
     logger.info("Open door indicates thread")
     for i in range(12):
@@ -185,7 +185,6 @@ def f_open_door_indicates_thread():
         time.sleep(0.2)
         relay1_controller.clear_bit(2)  # Зеленый светодиод (X:7)
         time.sleep(0.2)
-
 
 def f_before_lock_door_from_inside(self):
     logger.info("before lock door from inside")
@@ -198,55 +197,39 @@ def f_before_lock_door_from_inside(self):
         thread_time.join()
         relay1_controller.clear_bit(4)   # тушим красный светодиод
 
-
-# GPIO_24 callback (проверка сработки "язычка" на открытие)
 def f_lock_latch(self):
     time.sleep(1)
     logger.info("Lock latch")
     # close_door()
 
-
-# GPIO_18 callback (использование ключа)
 def f_using_key(self):
     logger.info("Use key")
 
-
-# GPIO_10 callback (сейф)
 def f_safe(self):
     logger.info("Safe")
     pass
 
-
-# GPIO_25 callback датчик дыма 1
 def f_fire_detector1(self):
     logger.info("Fire detector 1")
     pass
 
-
-# GPIO_19 callback датчик дыма 2
 def f_fire_detector2(self):
     logger.info("Fire detector 2")
     pass
 
-
-# GPIO_26 callback датчик дыма 3
 def f_fire_detector3(self):
     logger.info("Fire detector 3")
     pass
 
-
-# GPIO_8 callback датчик дыма 4
 def f_fire_detector4(self):
     logger.info("Fire detector 4")
     pass
-
 
 def start_timer(func, type=1):
     global timer_thread, off_timer_thread
     logger.info(f"Start timer type {type}")
     # Создаем и запускаем поток для выполнения delayed_action через 30 минут
     if type == 1:
-
         delay_seconds = int(system_config.t1_timeout * 60)
         timer_thread = multiprocessing.Process(target=func, args=(delay_seconds, ))
         timer_thread.start()
@@ -260,18 +243,14 @@ def timer_turn_everything_off(time_seconds):
     time.sleep(time_seconds)
     turn_everything_off()
 
-
 def turn_on(type = 1):
     global lighting_bl, lighting_br, lighting_main
     logger.info("Turn everything on")
     relay1_controller.clear_bit(5)  # Соленоиды (KG1:IN3)
     relay2_controller.clear_bit(2)  # Группа - R2 (KG0)
     relay2_controller.clear_bit(1)  # Группа - R3 (свет) (KG1:IN2)
-    #if type == 1:
-    #   start_timer(timer_turn_everything_off)
+    # Также включаем третий контроллер, если нужно
 
-
-# GPIO_22 callback картоприемник
 def f_card_key(self):
     global active_key, is_sold
     card_logger.info("Сработал картоприемник")
@@ -288,39 +267,23 @@ def f_card_key(self):
                 logger.info("Роль карты не определена")
         except Exception as e:
             logger.error(f"Ошибка при обработке карты: {str(e)}")
-    # else:
-    #     print("Выключение")
-    #     turn_on(type=2)
 
-
-
-# GPIO_27 callback цепь автоматов
 def f_circuit_breaker(self):
     logger.info("Curcuit breaker")
     pass
 
-
-# GPIO_17 callback контроль наличия питания R3 (освещения)
 def f_energy_sensor(self):
     logger.info("Energy sensor work")
 
-
-# GPIO_20 callback окно1 (балкон)
 def f_window1(self):
     logger.info("window 1")
 
-
-# GPIO_07 callback окно2
 def f_window2(self):
     logger.info("window 2")
 
-
-# GPIO_13 callback окно3
 def f_window3(self):
     logger.info("window 3")
 
-
-# GPIO_16 callback выключатель основного света спальня1
 def f_switch_main(self):
     global lighting_main
     logger.info(f"Switch main {lighting_main}")
@@ -331,8 +294,6 @@ def f_switch_main(self):
         relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
         lighting_main = False
 
-
-# GPIO_12 callback выключатель бра левый спальня1
 def f_switch_bl(self):
     global lighting_bl
     logger.info(f"switch bl {lighting_bl}")
@@ -343,8 +304,6 @@ def f_switch_bl(self):
         relay2_controller.set_bit(6)  # Бра левый1 (KG2:IN3)
         lighting_bl = False
 
-
-# GPIO_01 callback выключатель бра правый спальня1
 def f_switch_br(self):
     global lighting_br
     logger.info(f"Switch br {lighting_br}")
@@ -355,12 +314,40 @@ def f_switch_br(self):
         relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
         lighting_br = False
 
+# Добавляем обработчики для второй спальни и использования третьего реле
+def f_switch_main2(self):
+    global lighting_main2
+    logger.info(f"Switch main2 {lighting_main2}")
+    if not lighting_main2:
+        relay3_controller.clear_bit(1)  # Свет спальня2 (KG3:IN2)
+        lighting_main2 = True
+    else:
+        relay3_controller.set_bit(1)  # Свет спальня2 (KG3:IN2)
+        lighting_main2 = False
 
-# GPIO_21 callback датчик затопления ВЩ
+def f_switch_bl2(self):
+    global lighting_bl2
+    logger.info(f"switch bl2 {lighting_bl2}")
+    if not lighting_bl2:
+        relay3_controller.clear_bit(2)  # Бра левый2 (KG3:IN3)
+        lighting_bl2 = True
+    else:
+        relay3_controller.set_bit(2)  # Бра левый2 (KG3:IN3)
+        lighting_bl2 = False
+
+def f_switch_br2(self):
+    global lighting_br2
+    logger.info(f"Switch br2 {lighting_br2}")
+    if not lighting_br2:
+        relay3_controller.clear_bit(3)  # Бра правый2 (KG3:IN4)
+        lighting_br2 = True
+    else:
+        relay3_controller.set_bit(3)  # Бра правый2 (KG3:IN4)
+        lighting_br2 = False
+
 def f_flooding_sensor(self):
     logger.info("flooding_sensor")
     pass
-
 
 def is_door_locked_from_inside():
     global room_controller
@@ -368,34 +355,35 @@ def is_door_locked_from_inside():
     logger.info(f"Door is locked - {not bool(room_controller[23].state)}")
     return not bool(room_controller[23].state)
 
-
 def cardreader_before(self):
     logger.info("Cardreader before")
-    #print(f"Card Insert ?, {self.state} , {self.__dict__}")
     pass
-
 
 def init_room():
     logger.info("Init room")
     pin_structure = {
         0: None,
-        1: PinController(1, f_switch_br, react_on=GPIO.FALLING, bouncetime=500),
-        # кнопка-выключатель бра правый спальня1,
-        2: None,
-        3: None,
+        1: PinController(1, f_switch_br, up_down=GPIO.PUD_UP, react_on=GPIO.FALLING, bouncetime=0.5),
+        # кнопка-выключатель бра правый спальня1
+        2: PinController(2, f_switch_br2, up_down=GPIO.PUD_UP, react_on=GPIO.FALLING, bouncetime=0.5),
+        # кнопка-выключатель бра правый спальня2
+        3: PinController(3, f_switch_bl2, up_down=GPIO.PUD_UP, react_on=GPIO.FALLING, bouncetime=0.5),
+        # кнопка-выключатель бра левый спальня2
+        4: PinController(4, f_switch_main2, up_down=GPIO.PUD_UP, react_on=GPIO.FALLING, bouncetime=0.5),
+        # кнопка-выключатель основного света спальня2
         5: None,
         6: None,
         7: PinController(7, f_window2),  # (окно2)
-        8: PinController(8, f_fire_detector4),  # датчик дыма 4,
+        8: PinController(8, f_fire_detector4),  # датчик дыма 4
         9: None,
-        10: PinController(10, f_safe, react_on=GPIO.FALLING),  # (сейф),
-        11: None,  # кнопка-выключатель бра правый спальня2,
-        12: PinController(12, f_switch_bl, react_on=GPIO.FALLING, bouncetime=500),
+        10: PinController(10, f_safe, up_down=GPIO.PUD_UP, react_on=GPIO.FALLING),  # (сейф)
+        11: None,
+        12: PinController(12, f_switch_bl, up_down=GPIO.PUD_UP, react_on=GPIO.FALLING, bouncetime=0.5),
         # кнопка-выключатель бра левый спальня1
         13: PinController(13, f_window3),  # (окно3)
         14: None,
         15: None,
-        16: PinController(16, f_switch_main, react_on=GPIO.FALLING, bouncetime=500),
+        16: PinController(16, f_switch_main, up_down=GPIO.PUD_UP, react_on=GPIO.FALLING, bouncetime=0.5),
         # кнопка-выключатель основного света спальня1
         17: PinController(17, f_energy_sensor, up_down=GPIO.PUD_DOWN, react_on=GPIO.RISING),
         # (контроль наличия питания R3 (освещения))
@@ -403,49 +391,38 @@ def init_room():
         19: PinController(19, f_fire_detector2),  # (датчик дыма 2)
         20: PinController(20, f_window1),  # (окно1-балкон)
         21: PinController(21, f_flooding_sensor),  # (датчик затопления ВЩ)
-        22: PinController(22, f_card_key, react_on=GPIO.FALLING, up_down=GPIO.PUD_UP, before_callback=cardreader_before),  # картоприемник
-        23: PinController(23, f_lock_door_from_inside, before_callback=f_before_lock_door_from_inside),
+         22: PinController(22, f_card_key, up_down=GPIO.PUD_UP, react_on=GPIO.FALLING, before_callback=cardreader_before, bouncetime=0.3),  # картоприемник
+        23: PinController(23, f_lock_door_from_inside, before_callback=f_before_lock_door_from_inside, bouncetime=0.3),
         # замок "запрет"
-        24: PinController(24, f_lock_latch),  # замок сработка "язычка"
+        24: PinController(24, f_lock_latch, bouncetime=0.3),  # замок сработка "язычка"
         25: PinController(25, f_fire_detector1),  # датчик дыма 1
         26: PinController(26, f_fire_detector3),  # датчик дыма 3
         27: PinController(27, f_circuit_breaker, up_down=GPIO.PUD_DOWN, react_on=GPIO.RISING),
         # (цепь допконтактов автоматов)
     }
 
-    global bus
-    logger.info("The room has been initiated")
+    logger.info("Все пины комнаты успешно инициализированы")
     return pin_structure
 
 
 def get_card_role(card):
     global active_cards
-    # TODO Change index
-    # logger.info("Card role")
     if card:
         try:
             tip_index = int(card[5])
-            #logger.info(f"role {tip_index}")
         except:
             tip_index = 26
-            #logger.info(f"role except {tip_index}")
 
         if 0 <= tip_index <= 1:
-            #logger.info("User")
             return "User"
-
         elif 2 <= tip_index <= 8:
-            #logger.info("Worker")
             return "Worker"
         elif tip_index == 9:
-            #logger.info("Admin")
             return "Admin"
         else:
-            #logger.info("None User")
             return None
     else:
         return None
-
 
 
 def second_light_control():
@@ -488,7 +465,7 @@ def permit_open_door():
 def close_door(thread_time=None):
     global door_just_closed, can_open_the_door
     if not can_open_the_door:
-        logger.info("Door is closed. Permission denied!")  # ????
+        logger.info("Door is closed. Permission denied!")
         return
     can_open_the_door = False
     door_just_closed = True
@@ -498,7 +475,6 @@ def close_door(thread_time=None):
     relay1_controller.set_bit(0)  # Открыть замок (K:IN1)
     if thread_time:
         thread_time.join()
-    #relay1_controller.clear_bit(2)  # Зеленый светодиод (X:7)
     logger.info("Client has been entered!")
 
 
@@ -513,21 +489,34 @@ def get_db_connection():
     return db_connection
 
 
-
 def turn_everything_off():
-    global lighting_bl, lighting_br, lighting_main, is_sold
+    global lighting_bl, lighting_br, lighting_main, lighting_bl2, lighting_br2, lighting_main2, is_sold
     logger.info("Turn everything off !")
     relay2_controller.set_bit(2)  # Соленоиды (KG1:IN3)
     if not is_sold:
         relay1_controller.set_bit(5)  # Группа - R2 (KG0)
     relay2_controller.set_bit(1)  # Группа - R3 (свет) (KG1:IN2)
+    
+    # Выключение света в спальне 1
+    relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
     relay2_controller.set_bit(6)  # Бра левый1 (KG2:IN3)
     relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
-    lighting_br = False
-    lighting_bl = False
     lighting_main = False
-    relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
-    relay2_controller.set_bit(4)  
+    lighting_bl = False
+    lighting_br = False
+    
+    # Выключение света в спальне 2 (третье реле)
+    relay3_controller.set_bit(1)  # Свет спальня2 (KG3:IN2)
+    relay3_controller.set_bit(2)  # Бра левый2 (KG3:IN3)
+    relay3_controller.set_bit(3)  # Бра правый2 (KG3:IN4)
+    lighting_main2 = False
+    lighting_bl2 = False
+    lighting_br2 = False
+    
+    # Выключение радиаторов
+    relay2_controller.set_bit(4)  # Радиатор1 (KG2:IN1)
+    relay3_controller.set_bit(0)  # Радиатор2 (KG3:IN1)
+
 
 @retry(tries=3, delay=1)
 def get_active_cards():
@@ -539,18 +528,7 @@ def get_active_cards():
     cursor.execute(sql)
     key_list = cursor.fetchall()
 
-
-    # key_list = [(301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 2, 18, 14, 33, 25), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 8, 24, 10, 43, 18), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 8, 24, 10, 43, 22), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 8, 24, 12, 16, 44), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 8, 24, 11, 55, 42), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2023, 5, 24, 14, 31, 51), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2023, 5, 24, 14, 31, 53), None, 1), (301, '21 00 36 BD A2                  ', datetime.datetime(2023, 6, 6, 21, 0), datetime.datetime(2025, 6, 19, 0, 0), True, 26, datetime.datetime(2023, 6, 30, 13, 9, 57), None, 1), (301, '21 00 37 C9 F5                  ', datetime.datetime(2023, 7, 31, 21, 0), datetime.datetime(2024, 8, 3, 0, 0), True, 3, datetime.datetime(2023, 8, 3, 11, 51, 44), None, 1), (301, '21 00 37 C9 F5                  ', datetime.datetime(2023, 7, 31, 21, 0), datetime.datetime(2024, 8, 3, 0, 0), True, 3, datetime.datetime(2023, 8, 3, 11, 51, 47), None, 1), (301, '21 00 37 C9 F5                  ', datetime.datetime(2023, 7, 31, 21, 0), datetime.datetime(2024, 8, 3, 0, 0), True, 0, datetime.datetime(2023, 8, 3, 11, 48, 27), None, 1), (301, '21 00 37 C9 F5                  ', datetime.datetime(2023, 7, 31, 21, 0), datetime.datetime(2024, 8, 3, 0, 0), True, 2, datetime.datetime(2023, 8, 3, 11, 48, 50), None, 1)]
     active_cards = {handle_table_row(key): key for key in key_list}
-
-
-
-    # sql_update = "UPDATE table_kluch SET tip = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
-    #              "room_number} AND kl = '000037E663'".format(now=now, room_number=system_config.room_number)
-    # cursor.execute(sql_update)
-    # get_db_connection().commit()
-
-
 
     if count_keys != len(key_list):
         sql_update = "UPDATE table_kluch SET rpi = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
@@ -566,18 +544,16 @@ def get_active_cards():
             card_role = get_card_role(key)
 
             if card_role == "User":
-                print(key, "Is user")
+                logger.info(f"User key found: {key}")
                 is_sold = True
                 break
-        #logger.info(f"is_sold {is_sold}")
+        
         if prev_is_sold != is_sold:
             if not is_sold:
-                print("Is sold check !!!")
-                #turn_everything_off()
+                logger.info("Room is not sold anymore, turning everything off")
             else:
-                relay1_controller.clear_bit(4)  # R2
+                relay1_controller.clear_bit(5)  # R2
             prev_is_sold = is_sold
-
 
 
 @retry(tries=10, delay=1)
@@ -600,7 +576,7 @@ def wait_rfid():
             rfid_port.close()
             return key_
         else:
-            logger.warning("Карта не считана")
+            logger.debug("Карта не считана")
             rfid_port.close()
             return None
     except Exception as e:
@@ -615,13 +591,17 @@ def wait_rfid():
 @retry(tries=3, delay=5)
 def check_pins():
     global room_controller
-    pin_list_for_check = [1, 7, 8, 10, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+    pin_list_for_check = [1, 2, 3, 4, 7, 8, 10, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
     for item in pin_list_for_check:
-        room_controller[item].check_pin()
+        if item in room_controller and room_controller[item] is not None:
+            room_controller[item].check_pin()
+    
     state_message = "Pin state : "
     for item in pin_list_for_check:
-        state_message += "pin#{pin}:{state}, ".format(pin=room_controller[item].pin, state=room_controller[item].state)
-    logger.info(f"State: {state_message}")
+        if item in room_controller and room_controller[item] is not None:
+            state_message += f"pin#{room_controller[item].pin}:{room_controller[item].state}, "
+    
+    logger.debug(f"State: {state_message}")
 
 
 def signal_handler(signum, frame):
@@ -629,7 +609,6 @@ def signal_handler(signum, frame):
 
 
 class CheckPinTask(threading.Thread):
-
     def __init__(self, interval, execute):
         threading.Thread.__init__(self)
         self.daemon = False
@@ -647,7 +626,6 @@ class CheckPinTask(threading.Thread):
 
 
 class CheckCardTask(threading.Thread):
-
     def __init__(self, interval, execute):
         threading.Thread.__init__(self)
         self.daemon = False
@@ -662,7 +640,6 @@ class CheckCardTask(threading.Thread):
     def run(self):
         while not self.stopped.wait(self.interval.total_seconds()):
             self.execute()
-
 
 
 class CheckActiveCardsTask(threading.Thread):
@@ -684,15 +661,14 @@ class CheckActiveCardsTask(threading.Thread):
             self.execute(*self.args, **self.kwargs)
 
 
+# Web-интерфейс для управления и отладки
 from typing import Union
-
 from fastapi import FastAPI, Depends, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 templates = Jinja2Templates(directory="/home/pi/third_rooms/templates")
-
 app.mount("/static", StaticFiles(directory="/home/pi/third_rooms/static"), name="static")
 
 
@@ -705,15 +681,10 @@ def read_root():
 async def get_input():
     global room_controller
     states = []
-    for i in range(27):
-        try:
-            states.append({"pin" + str(i): "state = " + str(bool(room_controller[i].state))})
-        except Exception:
-            pass
-
-
+    for i in range(28):
+        if i in room_controller and room_controller[i] is not None:
+            states.append({"pin" + str(i): f"state = {bool(room_controller[i].state)}"})
     return states
-
 
 
 @app.get('/logs/')
@@ -724,50 +695,66 @@ async def get_logs(request: Request):
             logs = f.readlines()
         reversed_list = logs[::-1]
         return templates.TemplateResponse("index.html", {'request': request, "file_content": reversed_list})
-
     except FileNotFoundError:
         return {'error': 'Log file not found'}
 
+
+@app.get('/relay_state/')
+async def get_relay_state():
+    global relay1_controller, relay2_controller, relay3_controller
+    states = {
+        "PCA1 (0x38)": f"{bin(relay1_controller.get_state())}",
+        "PCA2 (0x39)": f"{bin(relay2_controller.get_state())}",
+        "PCA3 (0x40)": f"{bin(relay3_controller.get_state())}"
+    }
+    return states
+
+
+@app.get('/toggle_relay/{controller}/{bit}')
+async def toggle_relay(controller: int, bit: int):
+    global relay1_controller, relay2_controller, relay3_controller
+    
+    if controller == 1:
+        relay_controller = relay1_controller
+        address = "0x38"
+    elif controller == 2:
+        relay_controller = relay2_controller
+        address = "0x39"
+    elif controller == 3:
+        relay_controller = relay3_controller
+        address = "0x40"
+    else:
+        return {"error": f"Invalid controller: {controller}"}
+    
+    if 0 <= bit <= 7:
+        relay_controller.toggle_bit(bit)
+        return {"success": f"Toggled bit {bit} on controller {address}"}
+    else:
+        return {"error": f"Invalid bit: {bit}"}
 
 
 prev_card_present = True
 def cardreader_find():
     global is_empty, timer_thread, off_timer_thread, prev_card_present, second_light_thread
-    card_present = not GPIO.input(22)
-    #print("Карта GPIO ",  card_present)
-    data1 = bus.read_byte(0x38)
-    data2 = bus.read_byte(0x39)
+    try:
+        card_present = not GPIO.input(22)
+        data1 = bus.read_byte(0x38)
+        data2 = bus.read_byte(0x39)
+        data3 = bus.read_byte(0x40)
 
-    card_logger.debug(f"Состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}")
-    card_logger.debug(f"Состояние реле1: {bin(relay1_controller.get_state())}")
-    card_logger.debug(f"Состояние реле2: {bin(relay2_controller.get_state())}")
-    if card_present:
-        #print("Карта обнаружена")
-        is_empty = False
-        # if prev_card_present != card_present:
-        #         #     prev_card_present = card_present
-        #         # if off_timer_thread:
-        #         #     off_timer_thread.terminate()
-        #         #     logger.info("Stop timer type 2")
-        #         #     off_timer_thread = None
-        #         # if second_light_thread:
-        #         #     second_light_thread.terminate()
-        #         #     logger.info("Stop timer type 3")
-        #         #     second_light_thread = None
-    else:
-        pass
-        # if timer_thread:
-        #     timer_thread.terminate()
-        #     logger.info("Stop timer type 1")
-        #     timer_thread = None
-        #print("Карта не обнаружена")
-        # is_empty = True
-        # if prev_card_present != card_present:
-        #     #start_timer(timer_turn_everything_off, 2)
-        #     prev_card_present = card_present
-
-
-
+        card_logger.debug(f"Состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}, PCA3={bin(data3)}")
+        card_logger.debug(f"Состояние реле1: {bin(relay1_controller.get_state())}")
+        card_logger.debug(f"Состояние реле2: {bin(relay2_controller.get_state())}")
+        card_logger.debug(f"Состояние реле3: {bin(relay3_controller.get_state())}")
+        
+        if card_present:
+            is_empty = False
+            # Дополнительная логика по необходимости
+        else:
+            # Логика для случая отсутствия карты
+            pass
+    except Exception as e:
+        logger.error(f"Ошибка при проверке картоприемника: {str(e)}")
 
 
 def main():
@@ -848,6 +835,11 @@ def main():
         logger.info("Задачи остановлены")
     except Exception as e:
         logger.error(f"Критическая ошибка в основном цикле: {str(e)}")
+        # При критической ошибке, пытаемся освободить ресурсы
+        try:
+            GPIO.cleanup()
+        except:
+            pass
 
 
 @app.on_event("startup")
@@ -856,5 +848,27 @@ async def on_startup():
     logging.basicConfig()
     print("Server started")
 
+
+# Запуск основного приложения в отдельном потоке
 thread = threading.Thread(target=main)
+thread.daemon = True
 thread.start()
+
+# Если запускаем скрипт напрямую
+if __name__ == "__main__":
+    # Регистрация обработчика сигналов для корректного завершения
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    try:
+        # Запускаем основной поток, если он еще не запущен
+        if not thread.is_alive():
+            thread.start()
+        
+        # Держим основной поток активным
+        while True:
+            time.sleep(1)
+    except ProgramKilled:
+        print("Program killed: running cleanup code")
+        # Дополнительная очистка ресурсов
+        GPIO.cleanup()

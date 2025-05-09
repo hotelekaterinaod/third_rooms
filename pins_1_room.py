@@ -199,15 +199,15 @@ def init_relay_controllers():
         logger.warning("Контроллер реле по адресу 0x3b не обнаружен!")
 
     if relay1_controller:
-        status1 = relay1_controller.__read_with_retry()
+        status1 = relay1_controller.read_with_retry()
         logger.info(f"Состояние контроллера 1: {bin(status1) if status1 is not None else 'Ошибка чтения'}")
     
     if relay2_controller:
-        status2 = relay2_controller.__read_with_retry()
+        status2 = relay2_controller.read_with_retry()
         logger.info(f"Состояние контроллера 2: {bin(status2) if status2 is not None else 'Ошибка чтения'}")
     
     if relay3_controller:
-        status3 = relay3_controller.__read_with_retry()
+        status3 = relay3_controller.read_with_retry()
         logger.info(f"Состояние контроллера 3: {bin(status3) if status3 is not None else 'Ошибка чтения'}")
 
 

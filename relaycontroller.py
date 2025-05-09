@@ -46,7 +46,7 @@ class RelayController:
                     logger.error(f"Не удалось записать в регистр {register} контроллера {hex(self.__address)} после {self.__retry_attempts} попыток: {str(e)}")
                     return False
     
-    def __read_with_retry(self, register=None):
+    def read_with_retry(self, register=None):
         """
         Чтение из регистра с повторными попытками при ошибке
         

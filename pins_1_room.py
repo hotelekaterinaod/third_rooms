@@ -116,7 +116,7 @@ def init_relay_controllers():
     # Адреса контроллеров
     relay1_controller = RelayController(0x38)  # PCA1
     relay2_controller = RelayController(0x39)  # PCA2
-    relay3_controller = RelayController(0x40)  # PCA3 (новый контроллер)
+    relay3_controller = RelayController(0x3b)  # PCA3 (новый контроллер)
 
     # Маппинг для PCA1 (0x38)
     relay_logger.info("Настройка PCA1 (0x38):")
@@ -163,7 +163,7 @@ def init_relay_controllers():
 
     data1 = bus.read_byte(0x38)
     data2 = bus.read_byte(0x39)
-    data3 = bus.read_byte(0x40)
+    data3 = bus.read_byte(0x3b)
     logger.info(f"Начальное состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}, PCA3={bin(data3)}")
 
 # Остальные функции остаются такими же, как в вашем original файле...
@@ -710,7 +710,7 @@ async def get_relay_state():
     states = {
         "PCA1 (0x38)": f"{bin(relay1_controller.get_state())}",
         "PCA2 (0x39)": f"{bin(relay2_controller.get_state())}",
-        "PCA3 (0x40)": f"{bin(relay3_controller.get_state())}"
+        "PCA3 (0x3b)": f"{bin(relay3_controller.get_state())}"
     }
     return states
 
@@ -727,7 +727,7 @@ async def toggle_relay(controller: int, bit: int):
         address = "0x39"
     elif controller == 3:
         relay_controller = relay3_controller
-        address = "0x40"
+        address = "0x3b"
     else:
         return {"error": f"Invalid controller: {controller}"}
     
@@ -745,7 +745,7 @@ def cardreader_find():
         card_present = not GPIO.input(22)
         data1 = bus.read_byte(0x38)
         data2 = bus.read_byte(0x39)
-        data3 = bus.read_byte(0x40)
+        data3 = bus.read_byte(0x3b)
 
         card_logger.debug(f"Состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}, PCA3={bin(data3)}")
         card_logger.debug(f"Состояние реле1: {bin(relay1_controller.get_state())}")

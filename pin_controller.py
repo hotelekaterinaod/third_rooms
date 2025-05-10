@@ -9,8 +9,6 @@ class PinController:
     state = 0
 
     def validate_pin(self, pin):
-        if not pin:
-            raise Exception("Pin number expected.")
         if not isinstance(pin, str) and not isinstance(pin, int):
             raise Exception("Integer expected")
         if isinstance(pin, str) and not pin.isdigit():

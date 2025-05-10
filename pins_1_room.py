@@ -99,13 +99,37 @@ bus = smbus.SMBus(1)
 
 
 def init_relay_controllers():
-    global relay1_controller, relay2_controller
+    global relay1_controller, relay2_controller, relay3_controller
     
     logger.info("Инициализация контроллеров реле...")
     
     # адреса контроллеров
     relay1_controller = RelayController(0x38)  # PCA1
     relay2_controller = RelayController(0x39)  # PCA2
+    relay3_controller = RelayController(0x3b)  # PCA3
+
+    # Сначала сбрасываем все биты на всех контроллерах (устанавливаем в 1)
+    logger.info("Сброс всех контроллеров реле...")
+    
+    # Сброс PCA1 (0x38)
+    for bit in range(8):
+        relay1_controller.set_bit(bit)
+        time.sleep(0.1)  # Небольшая задержка для стабильности
+    
+    # Сброс PCA2 (0x39)
+    for bit in range(8):
+        relay2_controller.set_bit(bit)
+        time.sleep(0.1)
+    
+    # Сброс PCA3 (0x3b)
+    for bit in range(8):
+        relay3_controller.set_bit(bit)
+        time.sleep(0.1)
+    
+    logger.info("Все контроллеры реле сброшены")
+    time.sleep(0.5)  # Даем системе время стабилизироваться
+
+    # Теперь настраиваем начальное состояние контроллеров
 
     # Маппинг для PCA1 (0x38)
     relay_logger.info("Настройка PCA1 (0x38):")
@@ -138,10 +162,22 @@ def init_relay_controllers():
     relay_logger.info("- Бит 6: Бра левый1 (KG2:IN3)")
     relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
     relay_logger.info("- Бит 7: Бра правый1 (KG2:IN4)")
+    
+    # Маппинг для PCA3 (0x3b)
+    relay_logger.info("Настройка PCA3 (0x3b):")
+    relay3_controller.set_bit(0)  # Инициализация реле 3, бит 0
+    relay_logger.info("- Бит 0: Инициализирован")
+    relay3_controller.set_bit(1)  # Инициализация реле 3, бит 1
+    relay_logger.info("- Бит 1: Инициализирован")
+    relay3_controller.set_bit(2)  # Инициализация реле 3, бит 2
+    relay_logger.info("- Бит 2: Инициализирован")
+    relay3_controller.set_bit(3)  # Инициализация реле 3, бит 3
+    relay_logger.info("- Бит 3: Инициализирован")
 
     data1 = bus.read_byte(0x38)
     data2 = bus.read_byte(0x39)
-    logger.info(f"Начальное состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}")
+    data3 = bus.read_byte(0x3b)
+    logger.info(f"Начальное состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}, PCA3={bin(data3)}")
 
 
 
@@ -264,8 +300,8 @@ def timer_turn_everything_off(time_seconds):
 def turn_on(type = 1):
     global lighting_bl, lighting_br, lighting_main
     logger.info("Turn everything on")
-    relay1_controller.clear_bit(5)  # Соленоиды (KG1:IN3)
-    relay2_controller.clear_bit(2)  # Группа - R2 (KG0)
+    relay1_controller.clear_bit(5)  # Группа - R2 (KG0)
+    relay2_controller.clear_bit(2)  # Соленоиды (KG1:IN3)
     relay2_controller.clear_bit(1)  # Группа - R3 (свет) (KG1:IN2)
     #if type == 1:
     #   start_timer(timer_turn_everything_off)
@@ -546,12 +582,7 @@ def get_active_cards():
 
 
     # sql_update = "UPDATE table_kluch SET tip = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
-    #              "room_number} AND kl = '000037E663'".format(now=now, room_number=system_config.room_number)
-    # cursor.execute(sql_update)
-    # get_db_connection().commit()
-
-
-
+    #              "room_number} AND kl = '000037
     if count_keys != len(key_list):
         sql_update = "UPDATE table_kluch SET rpi = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
                      "room_number}".format(now=now, room_number=system_config.room_number)
@@ -733,45 +764,60 @@ async def get_logs(request: Request):
 prev_card_present = True
 def cardreader_find():
     global is_empty, timer_thread, off_timer_thread, prev_card_present, second_light_thread
-    card_present = not GPIO.input(22)
-    #print("Карта GPIO ",  card_present)
-    data1 = bus.read_byte(0x38)
-    data2 = bus.read_byte(0x39)
-
-    card_logger.debug(f"Состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}")
-    card_logger.debug(f"Состояние реле1: {bin(relay1_controller.get_state())}")
-    card_logger.debug(f"Состояние реле2: {bin(relay2_controller.get_state())}")
-    if card_present:
-        #print("Карта обнаружена")
-        is_empty = False
-        # if prev_card_present != card_present:
-        #         #     prev_card_present = card_present
-        #         # if off_timer_thread:
-        #         #     off_timer_thread.terminate()
-        #         #     logger.info("Stop timer type 2")
-        #         #     off_timer_thread = None
-        #         # if second_light_thread:
-        #         #     second_light_thread.terminate()
-        #         #     logger.info("Stop timer type 3")
-        #         #     second_light_thread = None
-    else:
-        pass
-        # if timer_thread:
-        #     timer_thread.terminate()
-        #     logger.info("Stop timer type 1")
-        #     timer_thread = None
-        #print("Карта не обнаружена")
-        # is_empty = True
-        # if prev_card_present != card_present:
-        #     #start_timer(timer_turn_everything_off, 2)
-        #     prev_card_present = card_present
+    try:
+        card_present = not GPIO.input(22)
+        #print("Карта GPIO ",  card_present)
+        
+        # Проверка состояния контроллеров реле с обработкой ошибок
+        try:
+            data1 = bus.read_byte(0x38)
+            data2 = bus.read_byte(0x39)
+            data3 = bus.read_byte(0x3b)
+            card_logger.debug(f"Состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}, PCA3={bin(data3)}")
+        except Exception as e:
+            logger.error(f"Ошибка при чтении состояния контроллеров: {str(e)}")
+        
+        # Проверка состояния реле через функции контроллеров
+        try:
+            card_logger.debug(f"Состояние реле1: {bin(relay1_controller.get_state())}")
+            card_logger.debug(f"Состояние реле2: {bin(relay2_controller.get_state())}")
+            card_logger.debug(f"Состояние реле3: {bin(relay3_controller.get_state())}")
+        except Exception as e:
+            logger.error(f"Ошибка при получении состояния реле: {str(e)}")
+            
+        if card_present:
+            #print("Карта обнаружена")
+            is_empty = False
+            # if prev_card_present != card_present:
+            #         #     prev_card_present = card_present
+            #         # if off_timer_thread:
+            #         #     off_timer_thread.terminate()
+            #         #     logger.info("Stop timer type 2")
+            #         #     off_timer_thread = None
+            #         # if second_light_thread:
+            #         #     second_light_thread.terminate()
+            #         #     logger.info("Stop timer type 3")
+            #         #     second_light_thread = None
+        else:
+            pass
+            # if timer_thread:
+            #     timer_thread.terminate()
+            #     logger.info("Stop timer type 1")
+            #     timer_thread = None
+            #print("Карта не обнаружена")
+            # is_empty = True
+            # if prev_card_present != card_present:
+            #     #start_timer(timer_turn_everything_off, 2)
+            #     prev_card_present = card_present
+    except Exception as e:
+        logger.error(f"Ошибка в cardreader_find: {str(e)}")
 
 
 
 
 
 def main():
-    global room_controller, door_just_closed, active_key
+    global room_controller, door_just_closed, active_key, relay1_controller, relay2_controller, relay3_controller
     
     try:
         logger.info("=== ЗАПУСК СИСТЕМЫ УПРАВЛЕНИЯ КОМНАТОЙ ===")
@@ -805,7 +851,7 @@ def main():
         logger.info("Задача проверки пинов запущена")
         
         # Запуск задачи проверки картоприемника
-        logger.info("Запуск задачи проверки картоприемника (интервал: 4 сек)...")
+        logger.info(f"Запуск задачи проверки картоприемника (интервал: 4 сек)...")
         cardreader_find()
         cardreader_task = CheckCardTask(interval=timedelta(seconds=4), execute=cardreader_find)
         cardreader_task.start()
@@ -846,8 +892,60 @@ def main():
         check_pin_task.stop()
         cardreader_task.stop()
         logger.info("Задачи остановлены")
+        
+        # Сброс всех реле при завершении программы
+        try:
+            logger.info("Сброс всех контроллеров реле перед завершением...")
+            
+            # Сброс PCA1 (0x38)
+            for bit in range(8):
+                relay1_controller.set_bit(bit)
+                time.sleep(0.1)
+            
+            # Сброс PCA2 (0x39)
+            for bit in range(8):
+                relay2_controller.set_bit(bit)
+                time.sleep(0.1)
+            
+            # Сброс PCA3 (0x3b)
+            for bit in range(8):
+                relay3_controller.set_bit(bit)
+                time.sleep(0.1)
+            
+            logger.info("Все контроллеры реле сброшены")
+        except Exception as e:
+            logger.error(f"Ошибка при сбросе реле: {str(e)}")
+            
     except Exception as e:
         logger.error(f"Критическая ошибка в основном цикле: {str(e)}")
+        
+        # Попытка сбросить реле при критической ошибке
+        try:
+            logger.info("Попытка сбросить все реле при критической ошибке...")
+            
+            # Сброс PCA1 (0x38)
+            for bit in range(8):
+                relay1_controller.set_bit(bit)
+                time.sleep(0.1)
+            
+            # Сброс PCA2 (0x39)
+            for bit in range(8):
+                relay2_controller.set_bit(bit)
+                time.sleep(0.1)
+            
+            # Сброс PCA3 (0x3b)
+            for bit in range(8):
+                relay3_controller.set_bit(bit)
+                time.sleep(0.1)
+            
+            logger.info("Реле сброшены")
+        except Exception as reset_error:
+            logger.error(f"Не удалось сбросить реле: {str(reset_error)}")
+
+
+# Обработка сигналов завершения для корректного освобождения ресурсов
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
 
 
 @app.on_event("startup")

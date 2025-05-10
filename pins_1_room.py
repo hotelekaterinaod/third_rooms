@@ -186,15 +186,7 @@ class RFIDHandler:
                         buffer.clear()
                         
                         try:
-                            try:
-                                key = key_data.decode('utf-8')
-                            except UnicodeDecodeError:
-                                try:
-                                    key = key_data.decode('latin-1')
-                                except:
-                                    key = key_data.hex()
-                            logger.debug(f"RFID raw bytes: {key_data.hex()}")
-                            logger.debug(f"RFID decoded key: {key}")
+                            key = key_data.decode('utf-8')
                             
                             # Предотвращаем повторное считывание одной и той же карты
                             now = datetime.now()
@@ -459,6 +451,55 @@ def timer_turn_everything_off(time_seconds):
     turn_everything_off()
 
 
+
+def rfid_thread_function():
+    """
+    Функция для чтения RFID-карт в отдельном потоке - максимально близка к оригинальному коду
+    """
+    global active_key
+
+    while True:
+        try:
+            # Инициализация последовательного порта так же, как в оригинальном коде
+            ser = serial.Serial('/dev/ttyS0', 9600, timeout=1)
+            ser.flushInput()
+            
+            # Чтение данных точно так же, как в оригинальном коде
+            data = ser.read(system_config.rfid_key_length)
+            key = data.decode('utf-8')
+            
+            # Если ключ непустой, обрабатываем его
+            if key and key.strip():
+                card_logger.info(f"Карта обнаружена: {key}")
+                
+                # Проверка ключа так же, как в оригинальном коде
+                if key in list(active_cards.keys()):
+                    active_key = active_cards[key]
+                    card_role = get_card_role(active_key)
+                    logger.info(f"Обнаружен корректный ключ, роль: {card_role} {key}")
+                    
+                    # Открытие двери
+                    permit_open_door()
+                else:
+                    logger.warning(f"Обнаружен неизвестный ключ: {key}")
+                    # Сигнализация о неизвестном ключе
+                    for i in range(15):
+                        relay1_controller.set_bit(4)  # Красный светодиод
+                        time.sleep(0.1)
+                        relay1_controller.clear_bit(4)
+                        time.sleep(0.1)
+            
+            # Закрытие порта
+            ser.close()
+            
+            # Пауза между чтениями
+            time.sleep(0.5)
+            
+        except Exception as e:
+            logger.error(f"Ошибка при чтении RFID: {str(e)}")
+            time.sleep(1)
+
+
 def turn_on(type = 1):
     global lighting_bl, lighting_br, lighting_main
     logger.info("Turn everything on")
@@ -523,10 +564,10 @@ def f_switch_main(self):
     global lighting_main
     logger.info(f"Switch main {lighting_main}")
     if not lighting_main:
-        relay2_controller.clear_bit(5, debounce_ms=50)  # Свет спальня1 (KG2:IN2)
+        relay2_controller.clear_bit(5, debounce_ms=25)  # Свет спальня1 (KG2:IN2)
         lighting_main = True
     else:
-        relay2_controller.set_bit(5, debounce_ms=50)  # Свет спальня1 (KG2:IN2)
+        relay2_controller.set_bit(5, debounce_ms=25)  # Свет спальня1 (KG2:IN2)
         lighting_main = False
 
 
@@ -535,10 +576,10 @@ def f_switch_bl(self):
     global lighting_bl
     logger.info(f"switch bl {lighting_bl}")
     if not lighting_bl:
-        relay2_controller.clear_bit(6, debounce_ms=50)  # Бра левый1 (KG2:IN3)
+        relay2_controller.clear_bit(6, debounce_ms=25)  # Бра левый1 (KG2:IN3)
         lighting_bl = True
     else:
-        relay2_controller.set_bit(6, debounce_ms=50)  # Бра левый1 (KG2:IN3)
+        relay2_controller.set_bit(6, debounce_ms=25)  # Бра левый1 (KG2:IN3)
         lighting_bl = False
 
 
@@ -547,10 +588,10 @@ def f_switch_br(self):
     global lighting_br
     logger.info(f"Switch br {lighting_br}")
     if not lighting_br:
-        relay2_controller.clear_bit(7, debounce_ms=50)  # Бра правый1 (KG2:IN4)
+        relay2_controller.clear_bit(7, debounce_ms=25)  # Бра правый1 (KG2:IN4)
         lighting_br = True
     else:
-        relay2_controller.set_bit(7, debounce_ms=50)  # Бра правый1 (KG2:IN4)
+        relay2_controller.set_bit(7, debounce_ms=25)  # Бра правый1 (KG2:IN4)
         lighting_br = False
 
 
@@ -701,14 +742,7 @@ def close_door(thread_time=None):
 
 
 def handle_table_row(row_):
-    raw_key = row_[system_config.rfig_key_table_index]
-    logger.debug(f"Raw key from DB: [{raw_key}]")
-    
-    # Очистим ключ, убрав пробелы
-    cleaned_key = raw_key.replace(" ", "")
-    logger.debug(f"Cleaned key for DB: [{cleaned_key}]")
-    
-    return cleaned_key
+    return row_[system_config.rfig_key_table_index].replace(" ", "")
 
 
 def get_db_connection():
@@ -739,13 +773,26 @@ def get_active_cards():
     global active_cards, count_keys, is_sold, prev_is_sold
     cursor = get_db_connection().cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Выведем SQL-запрос для отладки
     sql = "SELECT * FROM table_kluch WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
           "room_number} and tip IS NOT NULL AND tip >= 0 AND tip <= 9 ".format(now=now, room_number=system_config.room_number)
+    logger.debug(f"SQL запрос: {sql}")
+    
     cursor.execute(sql)
     key_list = cursor.fetchall()
-
+    
+    # Выведем полученные ключи для отладки
+    logger.debug(f"Получено ключей из БД: {len(key_list)}")
+    for i, key in enumerate(key_list):
+        logger.debug(f"Ключ {i+1}: {key}")
+    
+    # Обработка ключей для сравнения - ТОЧНО ТАК ЖЕ, как в оригинальном коде
     active_cards = {handle_table_row(key): key for key in key_list}
-
+    
+    # Выведем обработанные ключи для отладки
+    logger.debug(f"Активные ключи после обработки: {list(active_cards.keys())}")
+    
     if count_keys != len(key_list):
         sql_update = "UPDATE table_kluch SET rpi = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
                      "room_number}".format(now=now, room_number=system_config.room_number)
@@ -1000,10 +1047,11 @@ def main():
         cardreader_find()
         
         # Инициализация неблокирующего обработчика RFID
-        logger.info("Запуск обработчика RFID...")
-        rfid_handler = RFIDHandler(key_length=system_config.rfid_key_length)
-        rfid_handler.start(callback=handle_rfid_key)
-        logger.info("Обработчик RFID запущен")
+        logger.info("Запуск потока чтения RFID...")
+        rfid_thread = threading.Thread(target=rfid_thread_function)
+        rfid_thread.daemon = True
+        rfid_thread.start()
+        logger.info("Поток чтения RFID запущен")
         
         # Включаем устройства
         logger.info("Включение устройств по умолчанию...")

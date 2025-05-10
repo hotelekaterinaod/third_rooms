@@ -11,6 +11,7 @@ import RPi.GPIO as GPIO
 from retry import retry
 import logging
 import multiprocessing
+import os
 
 from pin_controller import PinController
 from relaycontroller import RelayController
@@ -98,6 +99,144 @@ db_connection = None
 bus = smbus.SMBus(1)
 
 
+# Класс для обработки RFID считывателя
+class RFIDHandler:
+    """
+    Обработчик RFID-считывателя в неблокирующем режиме
+    """
+    def __init__(self, port='/dev/ttyS0', baudrate=9600, key_length=None):
+        self.port = port
+        self.baudrate = baudrate
+        self.key_length = key_length
+        self.serial_port = None
+        self.callback = None
+        self.running = False
+        self.thread = None
+        self._last_key = None
+        self._last_key_time = None
+        
+    def start(self, callback=None):
+        """
+        Запуск обработчика RFID
+        
+        Args:
+            callback: функция, которая будет вызвана при получении ключа
+        """
+        if self.running:
+            return
+            
+        self.callback = callback
+        self.running = True
+        self.thread = threading.Thread(target=self._reader_loop)
+        self.thread.daemon = True
+        self.thread.start()
+        
+    def stop(self):
+        """
+        Остановка обработчика RFID
+        """
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=1.0)
+            self.thread = None
+            
+        if self.serial_port:
+            try:
+                self.serial_port.close()
+            except:
+                pass
+            self.serial_port = None
+    
+    def _reader_loop(self):
+        """
+        Внутренний цикл чтения из последовательного порта
+        """
+        import serial
+        
+        try:
+            self.serial_port = serial.Serial(
+                self.port, 
+                baudrate=self.baudrate,
+                timeout=0.1  # Короткий таймаут для неблокирующей работы
+            )
+            
+            # Очистка буфера
+            self.serial_port.flushInput()
+            
+            buffer = bytearray()
+            
+            while self.running:
+                # Чтение доступных данных (неблокирующее)
+                if self.serial_port.in_waiting > 0:
+                    data = self.serial_port.read(self.serial_port.in_waiting)
+                    buffer.extend(data)
+                    
+                    # Проверяем, накопили ли мы полный ключ
+                    if self.key_length is not None and len(buffer) >= self.key_length:
+                        # Берем последние key_length байт
+                        key_data = buffer[-self.key_length:]
+                        buffer.clear()
+                        
+                        try:
+                            key = key_data.decode('utf-8')
+                            
+                            # Предотвращаем повторное считывание одной и той же карты
+                            now = datetime.now()
+                            if (self._last_key != key or 
+                                self._last_key_time is None or 
+                                (now - self._last_key_time).total_seconds() > 1.0):
+                                self._last_key = key
+                                self._last_key_time = now
+                                
+                                if self.callback:
+                                    # Вызываем обработчик в отдельном потоке
+                                    threading.Thread(target=self.callback, args=(key,)).start()
+                        except Exception as e:
+                            logger.error(f"Error decoding RFID key: {str(e)}")
+                else:
+                    # Небольшая пауза, чтобы не грузить CPU
+                    time.sleep(0.01)
+                    
+        except Exception as e:
+            logger.error(f"Error in RFID reader: {str(e)}")
+        finally:
+            if self.serial_port:
+                try:
+                    self.serial_port.close()
+                except:
+                    pass
+                self.serial_port = None
+                
+    def read_key_once(self, timeout=2.0):
+        """
+        Синхронное чтение ключа (блокирующий вызов)
+        
+        Args:
+            timeout: таймаут ожидания в секундах
+            
+        Returns:
+            str: считанный ключ или None, если таймаут
+        """
+        import serial
+        
+        try:
+            with serial.Serial(self.port, baudrate=self.baudrate, timeout=timeout) as port:
+                port.flushInput()
+                
+                if self.key_length is not None:
+                    data = port.read(self.key_length)
+                else:
+                    data = port.readline()
+                    
+                if data:
+                    return data.decode('utf-8')
+                else:
+                    return None
+        except Exception as e:
+            logger.error(f"Error reading RFID key: {str(e)}")
+            return None
+
+
 def init_relay_controllers():
     global relay1_controller, relay2_controller, relay3_controller
     
@@ -106,31 +245,25 @@ def init_relay_controllers():
     # адреса контроллеров
     relay1_controller = RelayController(0x38)  # PCA1
     relay2_controller = RelayController(0x39)  # PCA2
-    relay3_controller = RelayController(0x3b)  # PCA3
-
-    # Сначала сбрасываем все биты на всех контроллерах (устанавливаем в 1)
+    
+    # Пробуем инициализировать реле 3, но продолжаем даже если его нет
+    try:
+        relay3_controller = RelayController(0x3b)  # PCA3
+        has_relay3 = relay3_controller.device_available
+    except Exception as e:
+        logger.warning(f"Не удалось инициализировать реле 3: {str(e)}")
+        relay3_controller = None
+        has_relay3 = False
+    
+    # Сбрасываем все контроллеры (все биты в 1)
     logger.info("Сброс всех контроллеров реле...")
     
-    # Сброс PCA1 (0x38)
-    for bit in range(8):
-        relay1_controller.set_bit(bit)
-        time.sleep(0.1)  # Небольшая задержка для стабильности
+    relay1_controller.reset_all()
+    relay2_controller.reset_all()
+    if has_relay3 and relay3_controller:
+        relay3_controller.reset_all()
     
-    # Сброс PCA2 (0x39)
-    for bit in range(8):
-        relay2_controller.set_bit(bit)
-        time.sleep(0.1)
-    
-    # Сброс PCA3 (0x3b)
-    for bit in range(8):
-        relay3_controller.set_bit(bit)
-        time.sleep(0.1)
-    
-    logger.info("Все контроллеры реле сброшены")
-    time.sleep(0.5)  # Даем системе время стабилизироваться
-
-    # Теперь настраиваем начальное состояние контроллеров
-
+    # Настраиваем начальное состояние контроллеров
     # Маппинг для PCA1 (0x38)
     relay_logger.info("Настройка PCA1 (0x38):")
     relay1_controller.set_bit(0)  # Открыть замок (K:IN1)
@@ -163,22 +296,26 @@ def init_relay_controllers():
     relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
     relay_logger.info("- Бит 7: Бра правый1 (KG2:IN4)")
     
-    # Маппинг для PCA3 (0x3b)
-    relay_logger.info("Настройка PCA3 (0x3b):")
-    relay3_controller.set_bit(0)  # Инициализация реле 3, бит 0
-    relay_logger.info("- Бит 0: Инициализирован")
-    relay3_controller.set_bit(1)  # Инициализация реле 3, бит 1
-    relay_logger.info("- Бит 1: Инициализирован")
-    relay3_controller.set_bit(2)  # Инициализация реле 3, бит 2
-    relay_logger.info("- Бит 2: Инициализирован")
-    relay3_controller.set_bit(3)  # Инициализация реле 3, бит 3
-    relay_logger.info("- Бит 3: Инициализирован")
+    # Инициализация третьего реле, если оно доступно
+    if has_relay3 and relay3_controller:
+        relay_logger.info("Настройка PCA3 (0x3b):")
+        relay3_controller.set_bit(0)  # Инициализация реле 3, бит 0
+        relay_logger.info("- Бит 0: Инициализирован")
+        relay3_controller.set_bit(1)  # Инициализация реле 3, бит 1
+        relay_logger.info("- Бит 1: Инициализирован")
+        relay3_controller.set_bit(2)  # Инициализация реле 3, бит 2
+        relay_logger.info("- Бит 2: Инициализирован")
+        relay3_controller.set_bit(3)  # Инициализация реле 3, бит 3
+        relay_logger.info("- Бит 3: Инициализирован")
 
-    data1 = bus.read_byte(0x38)
-    data2 = bus.read_byte(0x39)
-    data3 = bus.read_byte(0x3b)
-    logger.info(f"Начальное состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}, PCA3={bin(data3)}")
-
+    # Выводим начальное состояние контроллеров
+    data1 = relay1_controller.get_state()
+    data2 = relay2_controller.get_state()
+    if has_relay3 and relay3_controller:
+        data3 = relay3_controller.get_state()
+        logger.info(f"Начальное состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}, PCA3={bin(data3)}")
+    else:
+        logger.info(f"Начальное состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}")
 
 
 
@@ -282,7 +419,6 @@ def start_timer(func, type=1):
     logger.info(f"Start timer type {type}")
     # Создаем и запускаем поток для выполнения delayed_action через 30 минут
     if type == 1:
-
         delay_seconds = int(system_config.t1_timeout * 60)
         timer_thread = multiprocessing.Process(target=func, args=(delay_seconds, ))
         timer_thread.start()
@@ -575,14 +711,8 @@ def get_active_cards():
     cursor.execute(sql)
     key_list = cursor.fetchall()
 
-
-    # key_list = [(301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 2, 18, 14, 33, 25), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 8, 24, 10, 43, 18), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 8, 24, 10, 43, 22), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 8, 24, 12, 16, 44), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2021, 8, 24, 11, 55, 42), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2023, 5, 24, 14, 31, 51), None, 1), (301, '3D 00 4B 90 5E                  ', datetime.datetime(2017, 6, 7, 21, 0), datetime.datetime(2299, 1, 1, 0, 0), True, 9, datetime.datetime(2023, 5, 24, 14, 31, 53), None, 1), (301, '21 00 36 BD A2                  ', datetime.datetime(2023, 6, 6, 21, 0), datetime.datetime(2025, 6, 19, 0, 0), True, 26, datetime.datetime(2023, 6, 30, 13, 9, 57), None, 1), (301, '21 00 37 C9 F5                  ', datetime.datetime(2023, 7, 31, 21, 0), datetime.datetime(2024, 8, 3, 0, 0), True, 3, datetime.datetime(2023, 8, 3, 11, 51, 44), None, 1), (301, '21 00 37 C9 F5                  ', datetime.datetime(2023, 7, 31, 21, 0), datetime.datetime(2024, 8, 3, 0, 0), True, 3, datetime.datetime(2023, 8, 3, 11, 51, 47), None, 1), (301, '21 00 37 C9 F5                  ', datetime.datetime(2023, 7, 31, 21, 0), datetime.datetime(2024, 8, 3, 0, 0), True, 0, datetime.datetime(2023, 8, 3, 11, 48, 27), None, 1), (301, '21 00 37 C9 F5                  ', datetime.datetime(2023, 7, 31, 21, 0), datetime.datetime(2024, 8, 3, 0, 0), True, 2, datetime.datetime(2023, 8, 3, 11, 48, 50), None, 1)]
     active_cards = {handle_table_row(key): key for key in key_list}
 
-
-
-    # sql_update = "UPDATE table_kluch SET tip = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
-    #              "room_number} AND kl = '000037
     if count_keys != len(key_list):
         sql_update = "UPDATE table_kluch SET rpi = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
                      "room_number}".format(now=now, room_number=system_config.room_number)
@@ -606,41 +736,33 @@ def get_active_cards():
                 print("Is sold check !!!")
                 #turn_everything_off()
             else:
-                relay1_controller.clear_bit(4)  # R2
+                relay1_controller.clear_bit(4)  # Очистка бита 4 на реле 1
             prev_is_sold = is_sold
 
 
-
-@retry(tries=10, delay=1)
-def wait_rfid():
-    logger.info("Ожидание карты RFID...")
-    try:
-        # Увеличиваем таймаут
-        rfid_port = serial.Serial('/dev/ttyS0', 9600, timeout=2)
+# Обработчик ключа RFID - вызывается из RFIDHandler
+def handle_rfid_key(key):
+    global active_key
+    if not key:
+        logger.warning("Получен пустой ключ RFID")
+        return
         
-        # Очищаем буфер перед чтением
-        rfid_port.flushInput()
-        
-        # Получаем все доступные данные
-        read_byte = rfid_port.read(system_config.rfid_key_length)
-        
-        # Декодируем только если данные не пустые
-        if read_byte:
-            key_ = read_byte.decode("utf-8")
-            card_logger.info(f"Карта обнаружена: {key_} в {datetime.utcnow()}")
-            rfid_port.close()
-            return key_
-        else:
-            logger.warning("Карта не считана")
-            rfid_port.close()
-            return None
-    except Exception as e:
-        logger.error(f"Ошибка при чтении RFID: {str(e)}")
-        try:
-            rfid_port.close()
-        except:
-            pass
-        return None
+    card_logger.info(f"Карта обнаружена: {key} в {datetime.now()}")
+    
+    if key in list(active_cards.keys()):
+        active_key = active_cards[key]
+        card_role = get_card_role(active_key)
+        logger.info(f"Обнаружен корректный ключ, роль: {card_role} {key}")
+        logger.info("Открытие двери...")
+        permit_open_door()
+    else:
+        logger.warning(f"Обнаружен неизвестный ключ: {key}")
+        logger.info("Сигнализация о неизвестном ключе...")
+        for i in range(15):
+            relay1_controller.set_bit(4)  # Красный светодиод (X:9)
+            time.sleep(0.1)
+            relay1_controller.clear_bit(4)  # Красный светодиод (X:9)
+            time.sleep(0.1)
 
 
 @retry(tries=3, delay=5)
@@ -660,7 +782,6 @@ def signal_handler(signum, frame):
 
 
 class CheckPinTask(threading.Thread):
-
     def __init__(self, interval, execute):
         threading.Thread.__init__(self)
         self.daemon = False
@@ -675,25 +796,6 @@ class CheckPinTask(threading.Thread):
     def run(self):
         while not self.stopped.wait(self.interval.total_seconds()):
             self.execute()
-
-
-class CheckCardTask(threading.Thread):
-
-    def __init__(self, interval, execute):
-        threading.Thread.__init__(self)
-        self.daemon = False
-        self.stopped = threading.Event()
-        self.interval = interval
-        self.execute = execute
-
-    def stop(self):
-        self.stopped.set()
-        self.join()
-
-    def run(self):
-        while not self.stopped.wait(self.interval.total_seconds()):
-            self.execute()
-
 
 
 class CheckActiveCardsTask(threading.Thread):
@@ -742,9 +844,7 @@ async def get_input():
         except Exception:
             pass
 
-
     return states
-
 
 
 @app.get('/logs/')
@@ -760,64 +860,34 @@ async def get_logs(request: Request):
         return {'error': 'Log file not found'}
 
 
-
 prev_card_present = True
 def cardreader_find():
     global is_empty, timer_thread, off_timer_thread, prev_card_present, second_light_thread
     try:
         card_present = not GPIO.input(22)
-        #print("Карта GPIO ",  card_present)
         
-        # Проверка состояния контроллеров реле с обработкой ошибок
+        # Проверка состояния реле (для логгирования)
         try:
-            data1 = bus.read_byte(0x38)
-            data2 = bus.read_byte(0x39)
-            data3 = bus.read_byte(0x3b)
-            card_logger.debug(f"Состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}, PCA3={bin(data3)}")
+            data1 = relay1_controller.get_state()
+            data2 = relay2_controller.get_state()
+            if hasattr(relay3_controller, 'device_available') and relay3_controller.device_available:
+                data3 = relay3_controller.get_state()
+                card_logger.debug(f"Состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}, PCA3={bin(data3)}")
+            else:
+                card_logger.debug(f"Состояние контроллеров: PCA1={bin(data1)}, PCA2={bin(data2)}")
         except Exception as e:
             logger.error(f"Ошибка при чтении состояния контроллеров: {str(e)}")
-        
-        # Проверка состояния реле через функции контроллеров
-        try:
-            card_logger.debug(f"Состояние реле1: {bin(relay1_controller.get_state())}")
-            card_logger.debug(f"Состояние реле2: {bin(relay2_controller.get_state())}")
-            card_logger.debug(f"Состояние реле3: {bin(relay3_controller.get_state())}")
-        except Exception as e:
-            logger.error(f"Ошибка при получении состояния реле: {str(e)}")
             
         if card_present:
-            #print("Карта обнаружена")
             is_empty = False
-            # if prev_card_present != card_present:
-            #         #     prev_card_present = card_present
-            #         # if off_timer_thread:
-            #         #     off_timer_thread.terminate()
-            #         #     logger.info("Stop timer type 2")
-            #         #     off_timer_thread = None
-            #         # if second_light_thread:
-            #         #     second_light_thread.terminate()
-            #         #     logger.info("Stop timer type 3")
-            #         #     second_light_thread = None
-        else:
-            pass
-            # if timer_thread:
-            #     timer_thread.terminate()
-            #     logger.info("Stop timer type 1")
-            #     timer_thread = None
-            #print("Карта не обнаружена")
-            # is_empty = True
-            # if prev_card_present != card_present:
-            #     #start_timer(timer_turn_everything_off, 2)
-            #     prev_card_present = card_present
     except Exception as e:
         logger.error(f"Ошибка в cardreader_find: {str(e)}")
 
 
-
-
-
 def main():
     global room_controller, door_just_closed, active_key, relay1_controller, relay2_controller, relay3_controller
+    
+    rfid_handler = None
     
     try:
         logger.info("=== ЗАПУСК СИСТЕМЫ УПРАВЛЕНИЯ КОМНАТОЙ ===")
@@ -850,12 +920,15 @@ def main():
         check_pin_task.start()
         logger.info("Задача проверки пинов запущена")
         
-        # Запуск задачи проверки картоприемника
+        # Проверка состояния картоприемника
         logger.info(f"Запуск задачи проверки картоприемника (интервал: 4 сек)...")
         cardreader_find()
-        cardreader_task = CheckCardTask(interval=timedelta(seconds=4), execute=cardreader_find)
-        cardreader_task.start()
-        logger.info("Задача проверки картоприемника запущена")
+        
+        # Инициализация неблокирующего обработчика RFID
+        logger.info("Запуск обработчика RFID...")
+        rfid_handler = RFIDHandler(key_length=system_config.rfid_key_length)
+        rfid_handler.start(callback=handle_rfid_key)
+        logger.info("Обработчик RFID запущен")
         
         # Включаем устройства
         logger.info("Включение устройств по умолчанию...")
@@ -864,53 +937,27 @@ def main():
         
         logger.info("=== СИСТЕМА ГОТОВА К РАБОТЕ ===")
         
-        # Основной цикл
+        # Передаем управление в основной цикл FastAPI
         while True:
-            logger.info("Ожидание ключа...")
-            door_just_closed = False
-            
-            entered_key = wait_rfid()
-            if entered_key:
-                if entered_key in list(active_cards.keys()):
-                    active_key = active_cards[entered_key]
-                    card_role = get_card_role(active_key)
-                    logger.info(f"Обнаружен корректный ключ, роль: {card_role} {entered_key}")
-                    logger.info("Открытие двери...")
-                    permit_open_door()
-                else:
-                    logger.warning(f"Обнаружен неизвестный ключ: {entered_key}")
-                    logger.info("Сигнализация о неизвестном ключе...")
-                    for i in range(15):
-                        relay1_controller.set_bit(4)  # Красный светодиод (X:9)
-                        time.sleep(0.1)
-                        relay1_controller.clear_bit(4)  # Красный светодиод (X:9)
-                        time.sleep(0.1)
+            time.sleep(1)
             
     except ProgramKilled:
         logger.info("Получен сигнал завершения программы, очистка...")
         card_task.stop()
         check_pin_task.stop()
-        cardreader_task.stop()
+        if rfid_handler:
+            rfid_handler.stop()
         logger.info("Задачи остановлены")
         
         # Сброс всех реле при завершении программы
         try:
             logger.info("Сброс всех контроллеров реле перед завершением...")
             
-            # Сброс PCA1 (0x38)
-            for bit in range(8):
-                relay1_controller.set_bit(bit)
-                time.sleep(0.1)
-            
-            # Сброс PCA2 (0x39)
-            for bit in range(8):
-                relay2_controller.set_bit(bit)
-                time.sleep(0.1)
-            
-            # Сброс PCA3 (0x3b)
-            for bit in range(8):
-                relay3_controller.set_bit(bit)
-                time.sleep(0.1)
+            # Сброс реле
+            relay1_controller.reset_all()
+            relay2_controller.reset_all()
+            if hasattr(relay3_controller, 'device_available') and relay3_controller.device_available:
+                relay3_controller.reset_all()
             
             logger.info("Все контроллеры реле сброшены")
         except Exception as e:
@@ -923,20 +970,11 @@ def main():
         try:
             logger.info("Попытка сбросить все реле при критической ошибке...")
             
-            # Сброс PCA1 (0x38)
-            for bit in range(8):
-                relay1_controller.set_bit(bit)
-                time.sleep(0.1)
-            
-            # Сброс PCA2 (0x39)
-            for bit in range(8):
-                relay2_controller.set_bit(bit)
-                time.sleep(0.1)
-            
-            # Сброс PCA3 (0x3b)
-            for bit in range(8):
-                relay3_controller.set_bit(bit)
-                time.sleep(0.1)
+            # Сброс реле
+            relay1_controller.reset_all()
+            relay2_controller.reset_all()
+            if hasattr(relay3_controller, 'device_available') and relay3_controller.device_available:
+                relay3_controller.reset_all()
             
             logger.info("Реле сброшены")
         except Exception as reset_error:
@@ -954,5 +992,7 @@ async def on_startup():
     logging.basicConfig()
     print("Server started")
 
+# Запуск основного потока
 thread = threading.Thread(target=main)
+thread.daemon = True  # Поток будет остановлен, когда завершится основной поток
 thread.start()

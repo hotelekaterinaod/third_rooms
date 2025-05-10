@@ -465,7 +465,7 @@ def rfid_thread_function():
             ser.flushInput()
             
             # Чтение данных
-            data = ser.read(system_config.rfid_key_length)
+            data = (rfid_port.read(system_config.rfid_key_length)[1:11])
             
             # Если данные получены
             if data:

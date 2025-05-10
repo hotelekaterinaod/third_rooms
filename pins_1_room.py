@@ -268,6 +268,7 @@ def init_relay_controllers():
     try:
         relay3_controller = RelayController(0x3B)  # PCA3
         has_relay3 = relay3_controller.device_available
+        logger.info(f"relay3_controller 3 status: {has_relay3}")
     except Exception as e:
         logger.warning(f"Не удалось инициализировать реле 3: {str(e)}")
         relay3_controller = None
@@ -317,13 +318,13 @@ def init_relay_controllers():
     # Инициализация третьего реле, если оно доступно
     if has_relay3 and relay3_controller:
         relay_logger.info("Настройка PCA3 (0x3B):")
-        relay3_controller.set_bit(0)  # Инициализация реле 3, бит 0
+        relay3_controller.set_bit(4)  # Инициализация реле 3, бит 0
         relay_logger.info("- Бит 0: Инициализирован")
-        relay3_controller.set_bit(1)  # Инициализация реле 3, бит 1
+        relay3_controller.set_bit(5)  # Инициализация реле 3, бит 1
         relay_logger.info("- Бит 1: Инициализирован")
-        relay3_controller.set_bit(2)  # Инициализация реле 3, бит 2
+        relay3_controller.set_bit(6)  # Инициализация реле 3, бит 2
         relay_logger.info("- Бит 2: Инициализирован")
-        relay3_controller.set_bit(3)  # Инициализация реле 3, бит 3
+        relay3_controller.set_bit(7)  # Инициализация реле 3, бит 3
         relay_logger.info("- Бит 3: Инициализирован")
 
     # Выводим начальное состояние контроллеров
@@ -586,6 +587,16 @@ def f_switch_bl(self):
         relay2_controller.set_bit(6, debounce_ms=25)  # Бра левый1 (KG2:IN3)
         lighting_bl = False
 
+def f_switch_br_2(self):
+    global lighting_br2
+    logger.info(f"switch bl 2 {lighting_br2}")
+    if not lighting_br2:
+        relay3_controller.clear_bit(7, debounce_ms=25)  # Бра левый1 (KG2:IN3)
+        lighting_br2 = True
+    else:
+        relay3_controller.set_bit(7, debounce_ms=25)  # Бра левый1 (KG2:IN3)
+        lighting_br2 = False
+
 
 # GPIO_01 callback выключатель бра правый спальня1
 def f_switch_br(self):
@@ -619,6 +630,7 @@ def cardreader_before(self):
 
 
 def init_room():
+    global relay3_controller
     logger.info("Init room")
     pin_structure = {
         0: None,
@@ -632,7 +644,7 @@ def init_room():
         8: PinController(8, f_fire_detector4),  # датчик дыма 4,
         9: None,
         10: PinController(10, f_safe, react_on=GPIO.FALLING),  # (сейф),
-        11: None,  # кнопка-выключатель бра правый спальня2,
+        11: PinController(11, f_switch_br_2, react_on=GPIO.FALLING, bouncetime=80) if relay3_controller else None,  # кнопка-выключатель бра правый спальня2,
         12: PinController(12, f_switch_bl, react_on=GPIO.FALLING, bouncetime=80),
         # кнопка-выключатель бра левый спальня1
         13: PinController(13, f_window3),  # (окно3)

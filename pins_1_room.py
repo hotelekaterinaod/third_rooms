@@ -575,6 +575,16 @@ def f_switch_main(self):
         relay2_controller.set_bit(5, debounce_ms=25)  # Свет спальня1 (KG2:IN2)
         lighting_main = False
 
+def f_switch_main_2(self):
+    global lighting_main2
+    logger.info(f"Switch main {lighting_main2}")
+    if not lighting_main2:
+        relay3_controller.clear_bit(5, debounce_ms=25)  # Свет спальня1 (KG2:IN2)
+        lighting_main2 = True
+    else:
+        relay3_controller.set_bit(5, debounce_ms=25)  # Свет спальня1 (KG2:IN2)
+        lighting_main2 = False
+
 
 # GPIO_12 callback выключатель бра левый спальня1
 def f_switch_bl(self):
@@ -586,6 +596,18 @@ def f_switch_bl(self):
     else:
         relay2_controller.set_bit(6, debounce_ms=25)  # Бра левый1 (KG2:IN3)
         lighting_bl = False
+
+
+def f_switch_bl_2(self):
+    global lighting_bl2
+    logger.info(f"switch bl {lighting_bl2}")
+    if not lighting_bl2:
+        relay3_controller.clear_bit(6, debounce_ms=25)  # Бра левый1 (KG2:IN3)
+        lighting_bl2 = True
+    else:
+        relay3_controller.set_bit(6, debounce_ms=25)  # Бра левый1 (KG2:IN3)
+        lighting_bl2 = False
+
 
 def f_switch_br_2(self):
     global lighting_br2
@@ -631,20 +653,20 @@ def cardreader_before(self):
 
 def init_room():
     global relay3_controller
-    logger.info("Init room")
+    logger.info(f"Init room")
     pin_structure = {
         0: None,
         1: PinController(1, f_switch_br, react_on=GPIO.FALLING, bouncetime=80),
         # кнопка-выключатель бра правый спальня1,
         2: None,
         3: None,
-        5: None,
-        6: None,
+        5: PinController(5, f_switch_bl, react_on=GPIO.FALLING, bouncetime=80),
+        6: PinController(6, f_switch_main_2, react_on=GPIO.FALLING, bouncetime=80),
         7: PinController(7, f_window2),  # (окно2)
         8: PinController(8, f_fire_detector4),  # датчик дыма 4,
         9: None,
         10: PinController(10, f_safe, react_on=GPIO.FALLING),  # (сейф),
-        11: PinController(11, f_switch_br_2, react_on=GPIO.FALLING, bouncetime=80) if relay3_controller else None,  # кнопка-выключатель бра правый спальня2,
+        11: PinController(11, f_switch_br_2, react_on=GPIO.FALLING, bouncetime=80),  # кнопка-выключатель бра правый спальня2,
         12: PinController(12, f_switch_bl, react_on=GPIO.FALLING, bouncetime=80),
         # кнопка-выключатель бра левый спальня1
         13: PinController(13, f_window3),  # (окно3)

@@ -186,7 +186,15 @@ class RFIDHandler:
                         buffer.clear()
                         
                         try:
-                            key = key_data.decode('utf-8')
+                            try:
+                                key = key_data.decode('utf-8')
+                            except UnicodeDecodeError:
+                                try:
+                                    key = key_data.decode('latin-1')
+                                except:
+                                    key = key_data.hex()
+                            logger.debug(f"RFID raw bytes: {key_data.hex()}")
+                            logger.debug(f"RFID decoded key: {key}")
                             
                             # Предотвращаем повторное считывание одной и той же карты
                             now = datetime.now()
@@ -515,10 +523,10 @@ def f_switch_main(self):
     global lighting_main
     logger.info(f"Switch main {lighting_main}")
     if not lighting_main:
-        relay2_controller.clear_bit(5)  # Свет спальня1 (KG2:IN2)
+        relay2_controller.clear_bit(5, debounce_ms=50)  # Свет спальня1 (KG2:IN2)
         lighting_main = True
     else:
-        relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
+        relay2_controller.set_bit(5, debounce_ms=50)  # Свет спальня1 (KG2:IN2)
         lighting_main = False
 
 
@@ -527,10 +535,10 @@ def f_switch_bl(self):
     global lighting_bl
     logger.info(f"switch bl {lighting_bl}")
     if not lighting_bl:
-        relay2_controller.clear_bit(6)  # Бра левый1 (KG2:IN3)
+        relay2_controller.clear_bit(6, debounce_ms=50)  # Бра левый1 (KG2:IN3)
         lighting_bl = True
     else:
-        relay2_controller.set_bit(6)  # Бра левый1 (KG2:IN3)
+        relay2_controller.set_bit(6, debounce_ms=50)  # Бра левый1 (KG2:IN3)
         lighting_bl = False
 
 
@@ -539,10 +547,10 @@ def f_switch_br(self):
     global lighting_br
     logger.info(f"Switch br {lighting_br}")
     if not lighting_br:
-        relay2_controller.clear_bit(7)  # Бра правый1 (KG2:IN4)
+        relay2_controller.clear_bit(7, debounce_ms=50)  # Бра правый1 (KG2:IN4)
         lighting_br = True
     else:
-        relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
+        relay2_controller.set_bit(7, debounce_ms=50)  # Бра правый1 (KG2:IN4)
         lighting_br = False
 
 
@@ -693,7 +701,14 @@ def close_door(thread_time=None):
 
 
 def handle_table_row(row_):
-    return row_[system_config.rfig_key_table_index].replace(" ", "")
+    raw_key = row_[system_config.rfig_key_table_index]
+    logger.debug(f"Raw key from DB: [{raw_key}]")
+    
+    # Очистим ключ, убрав пробелы
+    cleaned_key = raw_key.replace(" ", "")
+    logger.debug(f"Cleaned key for DB: [{cleaned_key}]")
+    
+    return cleaned_key
 
 
 def get_db_connection():
@@ -765,17 +780,49 @@ def handle_rfid_key(key):
         logger.warning("Получен пустой ключ RFID")
         return
         
-    card_logger.info(f"Карта обнаружена: {key} в {datetime.now()}")
+    # Выведем отладочную информацию
+    card_logger.info(f"Карта обнаружена (raw): [{key}], длина: {len(key)}")
     
-    if key in list(active_cards.keys()):
+    # Очистим ключ от пробелов и других специальных символов
+    cleaned_key = key.strip().replace(" ", "")
+    card_logger.info(f"Очищенный ключ: [{cleaned_key}], длина: {len(cleaned_key)}")
+    
+    # Выведем список доступных ключей для отладки
+    card_logger.info(f"Доступные ключи: {list(active_cards.keys())}")
+    
+    # Проверим ключ (точное совпадение и совпадение с очисткой)
+    exact_match = key in list(active_cards.keys())
+    cleaned_match = cleaned_key in list(active_cards.keys())
+    card_logger.info(f"Exact match: {exact_match}, Cleaned match: {cleaned_match}")
+    
+    # Попробуем найти ключ, игнорируя пробелы, регистр и другие символы
+    found_key = None
+    for active_key_str in active_cards.keys():
+        if active_key_str.strip().replace(" ", "") == cleaned_key:
+            found_key = active_key_str
+            break
+    
+    if found_key:
+        active_key = active_cards[found_key]
+        card_role = get_card_role(active_key)
+        card_logger.info(f"Обнаружен корректный ключ (через гибкий поиск), роль: {card_role}, ключ: {found_key}")
+        card_logger.info("Открытие двери...")
+        permit_open_door()
+    elif exact_match:
         active_key = active_cards[key]
         card_role = get_card_role(active_key)
-        logger.info(f"Обнаружен корректный ключ, роль: {card_role} {key}")
-        logger.info("Открытие двери...")
+        card_logger.info(f"Обнаружен корректный ключ (точное совпадение), роль: {card_role}, ключ: {key}")
+        card_logger.info("Открытие двери...")
+        permit_open_door()
+    elif cleaned_match:
+        active_key = active_cards[cleaned_key]
+        card_role = get_card_role(active_key)
+        card_logger.info(f"Обнаружен корректный ключ (после очистки), роль: {card_role}, ключ: {cleaned_key}")
+        card_logger.info("Открытие двери...")
         permit_open_door()
     else:
-        logger.warning(f"Обнаружен неизвестный ключ: {key}")
-        logger.info("Сигнализация о неизвестном ключе...")
+        card_logger.warning(f"Обнаружен неизвестный ключ: {key}")
+        card_logger.info("Сигнализация о неизвестном ключе...")
         for i in range(15):
             relay1_controller.set_bit(4)  # Красный светодиод (X:9)
             time.sleep(0.1)

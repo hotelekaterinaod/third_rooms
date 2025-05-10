@@ -114,6 +114,7 @@ class RFIDHandler:
         self.thread = None
         self._last_key = None
         self._last_key_time = None
+        self._lock = threading.Lock()
         
     def start(self, callback=None):
         """
@@ -128,16 +129,18 @@ class RFIDHandler:
         self.callback = callback
         self.running = True
         self.thread = threading.Thread(target=self._reader_loop)
-        self.thread.daemon = True
+        self.thread.daemon = False  # Изменено с daemon=True на False
         self.thread.start()
         
     def stop(self):
         """
         Остановка обработчика RFID
         """
-        self.running = False
-        if self.thread:
-            self.thread.join(timeout=1.0)
+        with self._lock:
+            self.running = False
+            
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=2.0)  # Увеличен таймаут
             self.thread = None
             
         if self.serial_port:
@@ -165,9 +168,14 @@ class RFIDHandler:
             
             buffer = bytearray()
             
-            while self.running:
+            while True:
+                # Проверка флага остановки в безопасном контексте
+                with self._lock:
+                    if not self.running:
+                        break
+                
                 # Чтение доступных данных (неблокирующее)
-                if self.serial_port.in_waiting > 0:
+                if self.serial_port and self.serial_port.in_waiting > 0:
                     data = self.serial_port.read(self.serial_port.in_waiting)
                     buffer.extend(data)
                     
@@ -188,17 +196,27 @@ class RFIDHandler:
                                 self._last_key = key
                                 self._last_key_time = now
                                 
-                                if self.callback:
-                                    # Вызываем обработчик в отдельном потоке
-                                    threading.Thread(target=self.callback, args=(key,)).start()
+                                # Безопасный вызов callback
+                                local_callback = None
+                                with self._lock:
+                                    if self.running and self.callback:
+                                        local_callback = self.callback
+                                
+                                if local_callback:
+                                    # Вызываем напрямую, без создания нового потока
+                                    try:
+                                        local_callback(key)
+                                    except Exception as e:
+                                        # Безопасная обработка ошибок колбэка
+                                        print(f"Error in RFID callback: {str(e)}")
                         except Exception as e:
-                            logger.error(f"Error decoding RFID key: {str(e)}")
+                            print(f"Error decoding RFID key: {str(e)}")
                 else:
                     # Небольшая пауза, чтобы не грузить CPU
                     time.sleep(0.01)
                     
         except Exception as e:
-            logger.error(f"Error in RFID reader: {str(e)}")
+            print(f"Error in RFID reader: {str(e)}")
         finally:
             if self.serial_port:
                 try:
@@ -784,24 +802,27 @@ def signal_handler(signum, frame):
 class CheckPinTask(threading.Thread):
     def __init__(self, interval, execute):
         threading.Thread.__init__(self)
-        self.daemon = False
+        self.daemon = False  # Изменено с daemon=True на False
         self.stopped = threading.Event()
         self.interval = interval
         self.execute = execute
 
     def stop(self):
         self.stopped.set()
-        self.join()
+        self.join(timeout=2.0)  # Добавлен таймаут для безопасной остановки
 
     def run(self):
         while not self.stopped.wait(self.interval.total_seconds()):
-            self.execute()
+            try:
+                self.execute()
+            except Exception as e:
+                logger.error(f"Ошибка в задаче проверки пинов: {str(e)}")
 
 
 class CheckActiveCardsTask(threading.Thread):
     def __init__(self, interval, execute, *args, **kwargs):
         threading.Thread.__init__(self)
-        self.daemon = False
+        self.daemon = False  # Изменено с daemon=True на False
         self.stopped = threading.Event()
         self.interval = interval
         self.execute = execute
@@ -810,11 +831,14 @@ class CheckActiveCardsTask(threading.Thread):
 
     def stop(self):
         self.stopped.set()
-        self.join()
+        self.join(timeout=2.0)  # Добавлен таймаут для безопасной остановки
 
     def run(self):
         while not self.stopped.wait(self.interval.total_seconds()):
-            self.execute(*self.args, **self.kwargs)
+            try:
+                self.execute(*self.args, **self.kwargs)
+            except Exception as e:
+                logger.error(f"Ошибка в задаче проверки карт: {str(e)}")
 
 
 from typing import Union
@@ -888,6 +912,8 @@ def main():
     global room_controller, door_just_closed, active_key, relay1_controller, relay2_controller, relay3_controller
     
     rfid_handler = None
+    card_task = None
+    check_pin_task = None
     
     try:
         logger.info("=== ЗАПУСК СИСТЕМЫ УПРАВЛЕНИЯ КОМНАТОЙ ===")
@@ -905,6 +931,7 @@ def main():
         logger.info(f"Запуск задачи проверки новых карт (интервал: {system_config.new_key_check_interval} сек)...")
         card_task = CheckActiveCardsTask(interval=timedelta(seconds=system_config.new_key_check_interval),
                                          execute=get_active_cards)
+        card_task.daemon = False  # Изменено с daemon=True на False
         card_task.start()
         logger.info("Задача проверки новых карт запущена")
         
@@ -917,6 +944,7 @@ def main():
         check_pins()
         logger.info(f"Запуск задачи проверки пинов (интервал: {system_config.check_pin_timeout} сек)...")
         check_pin_task = CheckPinTask(interval=timedelta(seconds=system_config.check_pin_timeout), execute=check_pins)
+        check_pin_task.daemon = False  # Изменено с daemon=True на False
         check_pin_task.start()
         logger.info("Задача проверки пинов запущена")
         
@@ -943,10 +971,20 @@ def main():
             
     except ProgramKilled:
         logger.info("Получен сигнал завершения программы, очистка...")
-        card_task.stop()
-        check_pin_task.stop()
+        
+        # Безопасная остановка задач
         if rfid_handler:
+            logger.info("Останавливаем RFID обработчик...")
             rfid_handler.stop()
+            
+        if card_task:
+            logger.info("Останавливаем задачу проверки карт...")
+            card_task.stop()
+            
+        if check_pin_task:
+            logger.info("Останавливаем задачу проверки пинов...")
+            check_pin_task.stop()
+            
         logger.info("Задачи остановлены")
         
         # Сброс всех реле при завершении программы
@@ -954,34 +992,66 @@ def main():
             logger.info("Сброс всех контроллеров реле перед завершением...")
             
             # Сброс реле
-            relay1_controller.reset_all()
-            relay2_controller.reset_all()
-            if hasattr(relay3_controller, 'device_available') and relay3_controller.device_available:
+            if relay1_controller:
+                relay1_controller.reset_all()
+            if relay2_controller:
+                relay2_controller.reset_all()
+            if hasattr(relay3_controller, 'device_available') and relay3_controller and relay3_controller.device_available:
                 relay3_controller.reset_all()
             
             logger.info("Все контроллеры реле сброшены")
         except Exception as e:
             logger.error(f"Ошибка при сбросе реле: {str(e)}")
+        
+        # Явный выход для остановки всех процессов
+        os._exit(0)
             
     except Exception as e:
         logger.error(f"Критическая ошибка в основном цикле: {str(e)}")
+        
+        # Безопасная остановка задач
+        if rfid_handler:
+            try:
+                logger.info("Останавливаем RFID обработчик...")
+                rfid_handler.stop()
+            except:
+                pass
+            
+        if card_task:
+            try:
+                logger.info("Останавливаем задачу проверки карт...")
+                card_task.stop()
+            except:
+                pass
+            
+        if check_pin_task:
+            try:
+                logger.info("Останавливаем задачу проверки пинов...")
+                check_pin_task.stop()
+            except:
+                pass
         
         # Попытка сбросить реле при критической ошибке
         try:
             logger.info("Попытка сбросить все реле при критической ошибке...")
             
             # Сброс реле
-            relay1_controller.reset_all()
-            relay2_controller.reset_all()
-            if hasattr(relay3_controller, 'device_available') and relay3_controller.device_available:
+            if relay1_controller:
+                relay1_controller.reset_all()
+            if relay2_controller:
+                relay2_controller.reset_all()
+            if hasattr(relay3_controller, 'device_available') and relay3_controller and relay3_controller.device_available:
                 relay3_controller.reset_all()
             
             logger.info("Реле сброшены")
         except Exception as reset_error:
             logger.error(f"Не удалось сбросить реле: {str(reset_error)}")
-
+            
+        # Явный выход для остановки всех процессов
+        os._exit(1)
 
 # Обработка сигналов завершения для корректного освобождения ресурсов
+
 signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
 
@@ -994,5 +1064,11 @@ async def on_startup():
 
 # Запуск основного потока
 thread = threading.Thread(target=main)
-thread.daemon = True  # Поток будет остановлен, когда завершится основной поток
+thread.daemon = False    # Поток будет остановлен, когда завершится основной поток
 thread.start()
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    print("Shutting down server...")
+    signal_handler(signal.SIGTERM, None)  # Вызываем обработчик сигнала для корректной остановки
+    print("Server shutdown complete")

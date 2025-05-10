@@ -461,12 +461,12 @@ def rfid_thread_function():
     while True:
         try:
             # Точно так же, как в оригинальном коде
-            ser = serial.Serial('/dev/ttyS0', 9600, timeout=1)
-            ser.flushInput()
+            rfid_port  = serial.Serial('/dev/ttyS0', 9600, timeout=1)
+            rfid_port.flushInput()
             
             # Чтение данных
             data = (rfid_port.read(system_config.rfid_key_length)[1:11])
-            
+            rfid_port.close()
             # Если данные получены
             if data:
                 # Декодирование ключа
@@ -493,7 +493,7 @@ def rfid_thread_function():
                         time.sleep(0.1)
                 
             # Закрываем соединение
-            ser.close()
+            
             
             # Небольшая пауза между чтениями
             time.sleep(0.1)

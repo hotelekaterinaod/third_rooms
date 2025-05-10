@@ -266,7 +266,7 @@ def init_relay_controllers():
     
     # Пробуем инициализировать реле 3, но продолжаем даже если его нет
     try:
-        relay3_controller = RelayController(0x3b)  # PCA3
+        relay3_controller = RelayController(0x3B)  # PCA3
         has_relay3 = relay3_controller.device_available
     except Exception as e:
         logger.warning(f"Не удалось инициализировать реле 3: {str(e)}")
@@ -316,7 +316,7 @@ def init_relay_controllers():
     
     # Инициализация третьего реле, если оно доступно
     if has_relay3 and relay3_controller:
-        relay_logger.info("Настройка PCA3 (0x3b):")
+        relay_logger.info("Настройка PCA3 (0x3B):")
         relay3_controller.set_bit(0)  # Инициализация реле 3, бит 0
         relay_logger.info("- Бит 0: Инициализирован")
         relay3_controller.set_bit(1)  # Инициализация реле 3, бит 1

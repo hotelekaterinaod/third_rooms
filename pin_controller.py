@@ -45,7 +45,7 @@ class PinController:
             logger.info("Callback handler for pin {pin}".format(pin=pin))
         self.handler("Callback handler for pin {pin}".format(pin=pin))
 
-    def __init__(self, pin, callback, up_down=GPIO.PUD_UP, react_on=GPIO.BOTH, before_callback=None, bouncetime=50):
+    def __init__(self, pin, callback, up_down=GPIO.PUD_UP, react_on=GPIO.BOTH, before_callback=None, bouncetime=80):
         logger.info("Pin controller for {} pin has been initiated".format(pin))
         self.pin = self.validate_pin(pin)
         assert (up_down in (GPIO.PUD_UP, GPIO.PUD_DOWN)), \

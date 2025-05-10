@@ -791,19 +791,19 @@ def get_active_cards():
         logger.info(f"Найдено ключей для комнаты {system_config.room_number}: {len(key_list)}")
         
         # Логируем каждый ключ для отладки
-        for i, key_row in enumerate(key_list):
-            try:
-                raw_key = key_row[system_config.rfig_key_table_index]
-                formatted_key = handle_table_row(key_row)
-                logger.info(f"Ключ {i+1}: сырой='{raw_key}', форматированный='{formatted_key}'")
-            except Exception as e:
-                logger.error(f"Ошибка при обработке ключа {i+1}: {str(e)}")
+        # for i, key_row in enumerate(key_list):
+        #     try:
+        #         raw_key = key_row[system_config.rfig_key_table_index]
+        #         formatted_key = handle_table_row(key_row)
+                
+        #     except Exception as e:
+        #         logger.error(f"Ошибка при обработке ключа {i+1}: {str(e)}")
         
         # Создаем словарь ключей точно так же, как в оригинальном коде
         active_cards = {handle_table_row(key): key for key in key_list}
         
         # Логируем итоговый список ключей
-        logger.info(f"Активные ключи: {list(active_cards.keys())}")
+        # logger.info(f"Активные ключи: {list(active_cards.keys())}")
         
         # Оригинальный код для обновления rpi
         if count_keys != len(key_list):

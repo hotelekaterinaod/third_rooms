@@ -116,7 +116,7 @@ def main():
         
         # Тестирование найденных контроллеров
         for address in devices:
-            if address in [0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F]:  # Возможные адреса контроллеров
+            if address in [0x38, 0x39, 0x3b, 0x3B]:  # Возможные адреса контроллеров
                 test_relay_controller(address)
     
     except Exception as e:

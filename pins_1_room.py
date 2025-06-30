@@ -563,10 +563,26 @@ def f_window2(self):
 def f_window3(self):
     logger.info("window 3")
 
+from threading import Lock
+
+last_switch_time = 0
+switch_lock = Lock()
+MIN_SWITCH_INTERVAL = 0.5
 
 # GPIO_16 callback выключатель основного света спальня1
 def f_switch_main(self):
-    global lighting_main
+    global lighting_main, last_switch_time
+    
+    with switch_lock:
+        current_time = time.time()
+        
+        # Проверяем, прошло ли достаточно времени с последнего переключения
+        if current_time - last_switch_time < MIN_SWITCH_INTERVAL:
+            logger.info(f"Игнорируем переключение - слишком быстро (прошло {current_time - last_switch_time:.3f}s)")
+            return
+            
+        last_switch_time = current_time
+    
     logger.info(f"=== ПЕРЕКЛЮЧЕНИЕ ОСНОВНОГО СВЕТА ===")
     logger.info(f"Текущее состояние lighting_main: {lighting_main}")
 
@@ -580,36 +596,30 @@ def f_switch_main(self):
         logger.error(f"Не удалось прочитать состояние реле перед операцией: {str(e)}")
         return
 
-    # Выполняем операцию с повторными попытками
-    max_attempts = 3
-    for attempt in range(max_attempts):
-        try:
-            logger.info(f"Попытка {attempt + 1} из {max_attempts}")
+
+    try:
+       
+        
+        if not lighting_main:
+            logger.info("Включаем свет (clear bit 5)")
+            success = relay2_controller.clear_bit(5, debounce_ms=50)
+            if success:
+                lighting_main = True
+                logger.info("Свет ВКЛЮЧЕН успешно")
+               
+        else:
+            logger.info("Выключаем свет (set bit 5)")
+            success = relay2_controller.set_bit(5, debounce_ms=50)
+            if success:
+                lighting_main = False
+                logger.info("Свет ВЫКЛЮЧЕН успешно")
+               
+
             
-            if not lighting_main:
-                logger.info("Включаем свет (clear bit 5)")
-                success = relay2_controller.clear_bit(5, debounce_ms=50)
-                if success:
-                    lighting_main = True
-                    logger.info("Свет ВКЛЮЧЕН успешно")
-                    break
-            else:
-                logger.info("Выключаем свет (set bit 5)")
-                success = relay2_controller.set_bit(5, debounce_ms=50)
-                if success:
-                    lighting_main = False
-                    logger.info("Свет ВЫКЛЮЧЕН успешно")
-                    break
-                    
-            if not success:
-                logger.warning(f"Попытка {attempt + 1} неудачна")
-                time.sleep(0.2)  # Пауза перед повтором
-                
-        except Exception as e:
-            logger.error(f"Ошибка на попытке {attempt + 1}: {str(e)}")
-            time.sleep(0.2)
-    else:
-        logger.error("ВСЕ ПОПЫТКИ ПЕРЕКЛЮЧЕНИЯ НЕУДАЧНЫ!")
+    except Exception as e:
+        logger.error(f"Ошибка на попытке ")
+        time.sleep(0.2)
+
         
     # Финальная диагностика
     try:
@@ -718,7 +728,7 @@ def init_room():
         13: PinController(13, f_window3),  # (окно3)
         14: None,
         15: None,
-        16: PinController(16, f_switch_main, react_on=GPIO.FALLING, bouncetime=80),
+        16: PinController(16, f_switch_main, react_on=GPIO.FALLING, bouncetime=300),
         # кнопка-выключатель основного света спальня1
         17: PinController(17, f_energy_sensor, up_down=GPIO.PUD_DOWN, react_on=GPIO.RISING),
         # (контроль наличия питания R3 (освещения))

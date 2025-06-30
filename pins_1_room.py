@@ -297,8 +297,6 @@ def init_relay_controllers():
     relay_logger.info("- Бит 4: Красный светодиод (X:9)")
     relay1_controller.set_bit(5)  # Группа - R2 (силовое реле) (KG0)
     relay_logger.info("- Бит 5: Группа - R2 (силовое реле) (KG0)")
-    relay1_controller.set_bit(6)  # Свет спальня1 (KG2:IN2)
-    relay_logger.info("- Бит 5: Свет спальня1 (KG2:IN2)")
 
     # Маппинг для PCA2 (0x39)
     relay_logger.info("Настройка PCA2 (0x39):")
@@ -310,7 +308,8 @@ def init_relay_controllers():
     relay_logger.info("- Бит 2: Соленоиды (KG1:IN3)")
     relay2_controller.set_bit(4)  # Радиатор1 (KG2:IN1)
     relay_logger.info("- Бит 4: Радиатор1 (KG2:IN1)")
-
+    relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
+    relay_logger.info("- Бит 5: Свет спальня1 (KG2:IN2)")
     relay2_controller.set_bit(6)  # Бра левый1 (KG2:IN3)
     relay_logger.info("- Бит 6: Бра левый1 (KG2:IN3)")
     relay2_controller.set_bit(7)  # Бра правый1 (KG2:IN4)
@@ -570,10 +569,10 @@ def f_switch_main(self):
     global lighting_main
     logger.info(f"Switch main {lighting_main}")
     if not lighting_main:
-        relay1_controller.clear_bit(6, debounce_ms=80)  # Свет спальня1 (KG2:IN2)
+        relay2_controller.clear_bit(5, debounce_ms=25)  # Свет спальня1 (KG2:IN2)
         lighting_main = True
     else:
-        relay1_controller.set_bit(6, debounce_ms=80)  # Свет спальня1 (KG2:IN2)
+        relay2_controller.set_bit(5, debounce_ms=25)  # Свет спальня1 (KG2:IN2)
         lighting_main = False
 
 def f_switch_main_2(self):
@@ -804,7 +803,7 @@ def turn_everything_off():
     lighting_br = False
     lighting_bl = False
     lighting_main = False
-    relay1_controller.set_bit(6)  # Свет спальня1 (KG2:IN2)
+    relay2_controller.set_bit(5)  # Свет спальня1 (KG2:IN2)
     relay2_controller.set_bit(4)  
 
 @retry(tries=3, delay=1)

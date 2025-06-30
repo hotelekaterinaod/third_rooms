@@ -1113,6 +1113,9 @@ def main():
         # Инициализация контроллеров реле
         init_relay_controllers()
         
+        # Добавьте в main():
+        diagnose_relay_health(relay2_controller, "PCA2 (0x39)")
+
         # Получение активных карт
         logger.info("Получение списка активных карт...")
         get_active_cards()
@@ -1283,8 +1286,7 @@ def diagnose_relay_health(relay_controller, address_name):
         logger.error(f"ОШИБКА диагностики: {str(e)}")
         return False
 
-# Добавьте в main():
-diagnose_relay_health(relay2_controller, "PCA2 (0x39)")
+
 
 
 @app.on_event("startup")

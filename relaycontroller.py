@@ -98,77 +98,29 @@ class RelayController:
         if not 0 <= bit <= 7:
             raise ValueError("Bit must be between 0 and 7")
         
+        # Используем мьютекс для атомарной операции
         with RelayController._locks[self.address]:
+            # Вычисляем новое состояние: устанавливаем бит в 0
             new_state = self._state & ~(1 << bit)
             
+            # Если состояние не изменилось, ничего не делаем
             if new_state == self._state:
-                print(f"Bit {bit} already cleared, no operation needed")
                 return True
             
             try:
-                # ДОБАВЛЯЕМ ЗАДЕРЖКУ ПЕРЕД ЗАПИСЬЮ
-                time.sleep(0.01)  # 10ms задержка
-                
-                # Проверка доступности
-                test_read = self.bus.read_byte(self.address)
-                print(f"Pre-write test read successful: 0b{bin(test_read)}")
-                
-                # ДОПОЛНИТЕЛЬНАЯ ЗАДЕРЖКА
-                time.sleep(0.005)  # 5ms задержка
-                
-                # Записываем новое состояние с повторными попытками
-                for attempt in range(3):
-                    try:
-                        self.bus.write_byte(self.address, new_state)
-                        break  # Успешно записали
-                    except OSError as e:
-                        if e.errno == 121 and attempt < 2:  # Remote I/O error
-                            print(f"I2C write attempt {attempt + 1} failed, retrying...")
-                            time.sleep(0.010)  # 10ms между попытками
-                            continue
-                        else:
-                            raise  # Проброс ошибки, если все попытки неудачны
-                
-                # Задержка после записи
-                time.sleep(0.010)  # 10ms задержка
+                # Записываем новое состояние
+                self.bus.write_byte(self.address, new_state)
                 
                 # Задержка для предотвращения дребезга
                 if debounce_ms > 0:
                     time.sleep(debounce_ms / 1000.0)
                 
-                # Проверяем результат
-                verify_state = self.bus.read_byte(self.address)
-                print(f"Post-write verification: 0b{bin(verify_state)}")
-                
-                self._state = verify_state
+                # Обновляем кэшированное состояние
+                self._state = new_state
                 return True
-                
             except Exception as e:
-                print(f"DETAILED ERROR clearing bit {bit} on relay at 0x{self.address:02X}: {str(e)}")
-                print(f"Error type: {type(e)}")
-                print(f"Error errno: {getattr(e, 'errno', 'N/A')}")
-                
-                # ПОПЫТКА ВОССТАНОВЛЕНИЯ
-                try:
-                    time.sleep(0.050)  # Увеличенная пауза
-                    recovery_state = self.bus.read_byte(self.address)
-                    print(f"Recovery read successful: 0b{bin(recovery_state)}")
-                    self._state = recovery_state
-                    
-                    # Проверяем, выполнилась ли операция несмотря на ошибку
-                    actual_bit_value = 1 if (recovery_state & (1 << bit)) else 0
-                    expected_bit_value = 0  # Мы хотели очистить бит
-                    
-                    if actual_bit_value == expected_bit_value:
-                        print(f"Операция фактически выполнилась несмотря на ошибку I2C")
-                        return True
-                    else:
-                        print(f"Операция не выполнилась: ожидали бит {bit} = {expected_bit_value}, получили {actual_bit_value}")
-                        return False
-                        
-                except Exception as recovery_error:
-                    print(f"Recovery read also failed: {str(recovery_error)}")
-                    return False
+                print(f"Error clearing bit {bit} on relay at 0x{self.address:02X}: {str(e)}")
+                return False
     
     def get_bit(self, bit):
         """

@@ -34,7 +34,7 @@ class DBConfig:
 class Config:
 
     def __init__(self):
-        with open("/home/pi/software/third_rooms/config.json") as cf:
+        with open("/home/pi/third_rooms/config.json") as cf:
             config_data = json.loads(cf.read())
         self.room_number = config_data["room_number"]
         self.db_config = DBConfig(config_data["db_config"])

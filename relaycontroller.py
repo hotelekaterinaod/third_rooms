@@ -98,16 +98,22 @@ class RelayController:
         if not 0 <= bit <= 7:
             raise ValueError("Bit must be between 0 and 7")
         
-        # Используем мьютекс для атомарной операции
+        # ДОБАВЬТЕ ДИАГНОСТИКУ ПЕРЕД ОПЕРАЦИЕЙ
+        print(f"Attempting to clear bit {bit} on relay 0x{self.address:02X}")
+        print(f"Current state before operation: 0b{bin(self._state)}")
+        
         with RelayController._locks[self.address]:
-            # Вычисляем новое состояние: устанавливаем бит в 0
             new_state = self._state & ~(1 << bit)
             
-            # Если состояние не изменилось, ничего не делаем
             if new_state == self._state:
+                print(f"Bit {bit} already cleared, no operation needed")
                 return True
             
             try:
+                # ДОБАВЬТЕ ПРОВЕРКУ ДОСТУПНОСТИ ПЕРЕД ЗАПИСЬЮ
+                test_read = self.bus.read_byte(self.address)
+                print(f"Pre-write test read successful: 0b{bin(test_read)}")
+                
                 # Записываем новое состояние
                 self.bus.write_byte(self.address, new_state)
                 
@@ -115,11 +121,27 @@ class RelayController:
                 if debounce_ms > 0:
                     time.sleep(debounce_ms / 1000.0)
                 
-                # Обновляем кэшированное состояние
-                self._state = new_state
+                # ПРОВЕРЯЕМ РЕЗУЛЬТАТ
+                verify_state = self.bus.read_byte(self.address)
+                print(f"Post-write verification: 0b{bin(verify_state)}")
+                
+                self._state = verify_state
                 return True
+                
             except Exception as e:
-                print(f"Error clearing bit {bit} on relay at 0x{self.address:02X}: {str(e)}")
+                print(f"DETAILED ERROR clearing bit {bit} on relay at 0x{self.address:02X}: {str(e)}")
+                print(f"Error type: {type(e)}")
+                print(f"Error errno: {getattr(e, 'errno', 'N/A')}")
+                
+                # ПОПЫТКА ВОССТАНОВЛЕНИЯ
+                try:
+                    time.sleep(0.1)
+                    recovery_state = self.bus.read_byte(self.address)
+                    print(f"Recovery read successful: 0b{bin(recovery_state)}")
+                    self._state = recovery_state
+                except Exception as recovery_error:
+                    print(f"Recovery read also failed: {str(recovery_error)}")
+                    
                 return False
     
     def get_bit(self, bit):

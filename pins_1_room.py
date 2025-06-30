@@ -567,13 +567,59 @@ def f_window3(self):
 # GPIO_16 callback выключатель основного света спальня1
 def f_switch_main(self):
     global lighting_main
-    logger.info(f"Switch main {lighting_main}")
-    if not lighting_main:
-        relay2_controller.clear_bit(5, debounce_ms=25)  # Свет спальня1 (KG2:IN2)
-        lighting_main = True
+    logger.info(f"=== ПЕРЕКЛЮЧЕНИЕ ОСНОВНОГО СВЕТА ===")
+    logger.info(f"Текущее состояние lighting_main: {lighting_main}")
+
+    # Диагностика перед операцией
+    try:
+        current_relay_state = relay2_controller.get_state()
+        bit_5_state = relay2_controller.get_bit(5)
+        logger.info(f"Состояние реле перед операцией: 0b{bin(current_relay_state)}")
+        logger.info(f"Бит 5 (свет спальни) перед операцией: {bit_5_state}")
+    except Exception as e:
+        logger.error(f"Не удалось прочитать состояние реле перед операцией: {str(e)}")
+        return
+
+    # Выполняем операцию с повторными попытками
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            logger.info(f"Попытка {attempt + 1} из {max_attempts}")
+            
+            if not lighting_main:
+                logger.info("Включаем свет (clear bit 5)")
+                success = relay2_controller.clear_bit(5, debounce_ms=50)
+                if success:
+                    lighting_main = True
+                    logger.info("Свет ВКЛЮЧЕН успешно")
+                    break
+            else:
+                logger.info("Выключаем свет (set bit 5)")
+                success = relay2_controller.set_bit(5, debounce_ms=50)
+                if success:
+                    lighting_main = False
+                    logger.info("Свет ВЫКЛЮЧЕН успешно")
+                    break
+                    
+            if not success:
+                logger.warning(f"Попытка {attempt + 1} неудачна")
+                time.sleep(0.2)  # Пауза перед повтором
+                
+        except Exception as e:
+            logger.error(f"Ошибка на попытке {attempt + 1}: {str(e)}")
+            time.sleep(0.2)
     else:
-        relay2_controller.set_bit(5, debounce_ms=25)  # Свет спальня1 (KG2:IN2)
-        lighting_main = False
+        logger.error("ВСЕ ПОПЫТКИ ПЕРЕКЛЮЧЕНИЯ НЕУДАЧНЫ!")
+        
+    # Финальная диагностика
+    try:
+        final_relay_state = relay2_controller.get_state()
+        final_bit_5_state = relay2_controller.get_bit(5)
+        logger.info(f"Финальное состояние реле: 0b{bin(final_relay_state)}")
+        logger.info(f"Финальное состояние бита 5: {final_bit_5_state}")
+        logger.info(f"Финальное состояние lighting_main: {lighting_main}")
+    except Exception as e:
+        logger.error(f"Не удалось прочитать финальное состояние: {str(e)}")
 
 def f_switch_main_2(self):
     global lighting_main2
@@ -1199,6 +1245,46 @@ def main():
 
 signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
+
+def diagnose_relay_health(relay_controller, address_name):
+    """Диагностика состояния реле"""
+    logger.info(f"=== ДИАГНОСТИКА РЕЛЕ {address_name} ===")
+    
+    try:
+        # Читаем текущее состояние
+        current_state = relay_controller.get_state()
+        logger.info(f"Текущее состояние: 0b{bin(current_state)} (0x{current_state:02X})")
+        
+        # Проверяем каждый бит
+        for bit in range(8):
+            bit_state = relay_controller.get_bit(bit)
+            logger.info(f"Бит {bit}: {bit_state}")
+        
+        # Тестируем операции записи/чтения
+        logger.info("Тестирование операций...")
+        
+        # Сохраняем исходное состояние
+        original_state = current_state
+        
+        # Тест: установка всех битов
+        relay_controller.bus.write_byte(relay_controller.address, 0xFF)
+        time.sleep(0.1)
+        test_state = relay_controller.bus.read_byte(relay_controller.address)
+        logger.info(f"После установки 0xFF: 0b{bin(test_state)}")
+        
+        # Восстанавливаем исходное состояние
+        relay_controller.bus.write_byte(relay_controller.address, original_state)
+        time.sleep(0.1)
+        
+        logger.info("Диагностика завершена успешно")
+        return True
+        
+    except Exception as e:
+        logger.error(f"ОШИБКА диагностики: {str(e)}")
+        return False
+
+# Добавьте в main():
+diagnose_relay_health(relay2_controller, "PCA2 (0x39)")
 
 
 @app.on_event("startup")

@@ -931,13 +931,7 @@ def handle_rfid_key(key):
 @retry(tries=3, delay=5)
 def check_pins():
     global room_controller
-    pin_list_for_check = [1, 7, 8, 10, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
-    for item in pin_list_for_check:
-        room_controller[item].check_pin()
-    state_message = "Pin state : "
-    for item in pin_list_for_check:
-        state_message += "pin#{pin}:{state}, ".format(pin=room_controller[item].pin, state=room_controller[item].state)
-    logger.info(f"State: {state_message}")
+
 
 
 def signal_handler(signum, frame):

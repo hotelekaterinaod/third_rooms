@@ -266,8 +266,8 @@ def init_relay_controllers():
     
     # Пробуем инициализировать реле 3, но продолжаем даже если его нет
     try:
-        relay3_controller = RelayController(0x3B)  # PCA3
-        has_relay3 = relay3_controller.device_available
+        relay3_controller = None  # PCA3
+        has_relay3 = False
         logger.info(f"relay3_controller 3 status: {has_relay3}")
     except Exception as e:
         logger.warning(f"Не удалось инициализировать реле 3: {str(e)}")
@@ -279,8 +279,8 @@ def init_relay_controllers():
     
     relay1_controller.reset_all()
     relay2_controller.reset_all()
-    if has_relay3 and relay3_controller:
-        relay3_controller.reset_all()
+    # if has_relay3 and relay3_controller:
+    #     relay3_controller.reset_all()
     
     # Настраиваем начальное состояние контроллеров
     # Маппинг для PCA1 (0x38)
@@ -655,21 +655,21 @@ def init_room():
     global relay3_controller
     logger.info(f"Init room")
     pin_structure = {
-        0: PinController(0, f_switch_br_2, react_on=GPIO.FALLING, bouncetime=80),
-        1: PinController(1, f_switch_br, react_on=GPIO.FALLING, bouncetime=80),
+        0: None,
+        1: None,
         # кнопка-выключатель бра правый спальня1,
         2: None,
         3: None,
-        5: PinController(5, f_switch_bl_2, react_on=GPIO.FALLING, bouncetime=80),
-        6: PinController(6, f_switch_main_2, react_on=GPIO.FALLING, bouncetime=80),
+        5: None,
+        6:None,
         7: PinController(7, f_window2),  # (окно2)
         8: PinController(8, f_fire_detector4),  # датчик дыма 4,
         9: None,
         10: PinController(10, f_safe, react_on=GPIO.FALLING),  # (сейф),
         11: None,  # кнопка-выключатель бра правый спальня2,
-        12: PinController(12, f_switch_bl, react_on=GPIO.FALLING, bouncetime=80),
+        12: None,
         # кнопка-выключатель бра левый спальня1
-        13: PinController(13, f_window3),  # (окно3)
+        13: None,  # (окно3)
         14: None,
         15: None,
         16: PinController(16, f_switch_main, react_on=GPIO.FALLING, bouncetime=80),
@@ -1208,27 +1208,6 @@ async def on_startup():
     print("Server started")
 
 # Запуск основного потока
-def monitor_relay_state():
-    """Непрерывный мониторинг состояния реле"""
-    prev_state = None
-    while True:
-        try:
-            current_state = relay2_controller.get_state()
-            if current_state != prev_state:
-                logger.info(f"ИЗМЕНЕНИЕ РЕЛЕ: {bin(prev_state)} → {bin(current_state)}")
-                for bit in range(8):
-                    old_bit = (prev_state >> bit) & 1 if prev_state else 0
-                    new_bit = (current_state >> bit) & 1
-                    if old_bit != new_bit:
-                        logger.info(f"  Бит {bit}: {old_bit} → {new_bit}")
-                prev_state = current_state
-            time.sleep(0.1)
-        except Exception as e:
-            logger.error(f"Ошибка мониторинга: {str(e)}")
-            time.sleep(1)
-
-# Запустите в отдельном потоке
-threading.Thread(target=monitor_relay_state, daemon=True).start()
 thread = threading.Thread(target=main)
 thread.daemon = False    # Поток будет остановлен, когда завершится основной поток
 thread.start()

@@ -1208,6 +1208,27 @@ async def on_startup():
     print("Server started")
 
 # Запуск основного потока
+def monitor_relay_state():
+    """Непрерывный мониторинг состояния реле"""
+    prev_state = None
+    while True:
+        try:
+            current_state = relay2_controller.get_state()
+            if current_state != prev_state:
+                logger.info(f"ИЗМЕНЕНИЕ РЕЛЕ: {bin(prev_state)} → {bin(current_state)}")
+                for bit in range(8):
+                    old_bit = (prev_state >> bit) & 1 if prev_state else 0
+                    new_bit = (current_state >> bit) & 1
+                    if old_bit != new_bit:
+                        logger.info(f"  Бит {bit}: {old_bit} → {new_bit}")
+                prev_state = current_state
+            time.sleep(0.1)
+        except Exception as e:
+            logger.error(f"Ошибка мониторинга: {str(e)}")
+            time.sleep(1)
+
+# Запустите в отдельном потоке
+threading.Thread(target=monitor_relay_state, daemon=True).start()
 thread = threading.Thread(target=main)
 thread.daemon = False    # Поток будет остановлен, когда завершится основной поток
 thread.start()

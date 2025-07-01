@@ -266,8 +266,8 @@ def init_relay_controllers():
     
     # Пробуем инициализировать реле 3, но продолжаем даже если его нет
     try:
-        relay3_controller = None  # PCA3
-        has_relay3 = False
+        relay3_controller = RelayController(0x3B)  # PCA3
+        has_relay3 = relay3_controller.device_available
         logger.info(f"relay3_controller 3 status: {has_relay3}")
     except Exception as e:
         logger.warning(f"Не удалось инициализировать реле 3: {str(e)}")
@@ -279,8 +279,8 @@ def init_relay_controllers():
     
     relay1_controller.reset_all()
     relay2_controller.reset_all()
-    # if has_relay3 and relay3_controller:
-    #     relay3_controller.reset_all()
+    if has_relay3 and relay3_controller:
+        relay3_controller.reset_all()
     
     # Настраиваем начальное состояние контроллеров
     # Маппинг для PCA1 (0x38)
@@ -655,21 +655,21 @@ def init_room():
     global relay3_controller
     logger.info(f"Init room")
     pin_structure = {
-        0: None,
-        1: None,
+        0: PinController(0, f_switch_br_2, react_on=GPIO.FALLING, bouncetime=80),
+        1: PinController(1, f_switch_br, react_on=GPIO.FALLING, bouncetime=80),
         # кнопка-выключатель бра правый спальня1,
         2: None,
         3: None,
-        5: None,
-        6:None,
+        5: PinController(5, f_switch_bl_2, react_on=GPIO.FALLING, bouncetime=80),
+        6: PinController(6, f_switch_main_2, react_on=GPIO.FALLING, bouncetime=80),
         7: PinController(7, f_window2),  # (окно2)
         8: PinController(8, f_fire_detector4),  # датчик дыма 4,
         9: None,
         10: PinController(10, f_safe, react_on=GPIO.FALLING),  # (сейф),
         11: None,  # кнопка-выключатель бра правый спальня2,
-        12: None,
+        12: PinController(12, f_switch_bl, react_on=GPIO.FALLING, bouncetime=80),
         # кнопка-выключатель бра левый спальня1
-        13: None,  # (окно3)
+        13: PinController(13, f_window3),  # (окно3)
         14: None,
         15: None,
         16: PinController(16, f_switch_main, react_on=GPIO.FALLING, bouncetime=80),
@@ -931,7 +931,13 @@ def handle_rfid_key(key):
 @retry(tries=3, delay=5)
 def check_pins():
     global room_controller
-
+    pin_list_for_check = [1, 7, 8, 10, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+    for item in pin_list_for_check:
+        room_controller[item].check_pin()
+    state_message = "Pin state : "
+    for item in pin_list_for_check:
+        state_message += "pin#{pin}:{state}, ".format(pin=room_controller[item].pin, state=room_controller[item].state)
+    logger.info(f"State: {state_message}")
 
 
 def signal_handler(signum, frame):

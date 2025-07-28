@@ -814,9 +814,14 @@ def get_active_cards():
         cursor = get_db_connection().cursor()
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # УПРОЩЕННЫЙ SQL-запрос для диагностики
-        sql = "SELECT * FROM table_kluch WHERE num = {room_number}".format(room_number=system_config.room_number)
-        logger.info(f"Упрощенный SQL запрос: {sql}")
+        # SQL-запрос с проверкой дат активности ключей
+        sql = """
+        SELECT * FROM table_kluch 
+        WHERE num = {room_number} 
+        AND (dstart IS NULL OR dstart <= '{now}') 
+        AND (dend IS NULL OR dend >= '{now}')
+        """.format(room_number=system_config.room_number, now=now)
+        logger.info(f"SQL запрос с проверкой дат: {sql}")
         
         cursor.execute(sql)
         key_list = cursor.fetchall()

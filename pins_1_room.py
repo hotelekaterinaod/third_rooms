@@ -818,8 +818,8 @@ def get_active_cards():
         sql = """
         SELECT * FROM table_kluch 
         WHERE num = {room_number} 
-        AND (dstart IS NULL OR dstart <= '{now}') 
-        AND (dend IS NULL OR dend >= '{now}')
+        AND (dstart <= '{now}') 
+        AND (dend >= '{now}')
         """.format(room_number=system_config.room_number, now=now)
         logger.info(f"SQL запрос с проверкой дат: {sql}")
         

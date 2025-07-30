@@ -868,9 +868,9 @@ def get_active_cards():
             key_row = key_data['key_row']
             
             try:
-                # Проверяем даты активности
-                dstart = key_row[3] if len(key_row) > 3 else None
-                dend = key_row[4] if len(key_row) > 4 else None
+                # Проверяем даты активности (правильная индексация)
+                dstart = key_row[2] if len(key_row) > 2 else None
+                dend = key_row[3] if len(key_row) > 3 else None
                 
                 # Добавляем отладочное логирование типов данных
                 logger.debug(f"Отладка типов данных для ключа {key_data['key_id']}: dstart={dstart} (тип: {type(dstart)}), dend={dend} (тип: {type(dend)})")
@@ -944,11 +944,11 @@ def get_active_cards():
                         tip = 0
                     
                     tekdat = key_row[6] if len(key_row) > 6 else 'Нет данных'
-                    dstart = key_row[3] if len(key_row) > 3 else 'Нет данных'
-                    dend = key_row[4] if len(key_row) > 4 else 'Нет данных'
+                    dstart = key_row[2] if len(key_row) > 2 else 'Нет данных'
+                    dend = key_row[3] if len(key_row) > 3 else 'Нет данных'
                     
                     # Дополнительные поля из базы данных
-                    num = key_row[2] if len(key_row) > 2 else 'Нет данных'
+                    num = key_row[0] if len(key_row) > 0 else 'Нет данных'
                     additional_info = f", поля БД: {len(key_row)} полей" if len(key_row) > 7 else ""
                     
                     logger.info(f"Ключ #{i+1}: ID={key_id}, TIP={tip}, TEKDAT={tekdat}, DSTART={dstart}, DEND={dend}, NUM={num}{additional_info}")
@@ -1008,9 +1008,9 @@ def log_key_usage(key_row, match_type):
             tip = 0
         
         tekdat = key_row[6] if len(key_row) > 6 else 'Нет данных'
-        dstart = key_row[3] if len(key_row) > 3 else 'Нет данных'
-        dend = key_row[4] if len(key_row) > 4 else 'Нет данных'
-        num = key_row[2] if len(key_row) > 2 else 'Нет данных'
+        dstart = key_row[2] if len(key_row) > 2 else 'Нет данных'
+        dend = key_row[3] if len(key_row) > 3 else 'Нет данных'
+        num = key_row[0] if len(key_row) > 0 else 'Нет данных'
         
         card_role = get_card_role(key_row)
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

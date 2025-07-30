@@ -814,48 +814,127 @@ def get_active_cards():
         cursor = get_db_connection().cursor()
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # SQL-запрос с проверкой дат активности ключей
+        # Получаем все записи ключей для комнаты (без фильтрации по датам)
         sql = """
         SELECT * FROM table_kluch 
-        WHERE num = {room_number} 
-        AND (dstart <= '{now}') 
-        AND (dend >= '{now}')
-        """.format(room_number=system_config.room_number, now=now)
-        logger.info(f"SQL запрос с проверкой дат: {sql}")
+        WHERE num = {room_number}
+        """.format(room_number=system_config.room_number)
+        logger.info(f"SQL запрос для получения всех ключей: {sql}")
         
         cursor.execute(sql)
-        key_list = cursor.fetchall()
+        all_keys = cursor.fetchall()
         
-        # Логируем количество найденных ключей
-        logger.info(f"Найдено ключей для комнаты {system_config.room_number}: {len(key_list)}")
+        logger.info(f"Найдено всего записей ключей для комнаты {system_config.room_number}: {len(all_keys)}")
         
-        # Логируем каждый ключ для отладки
-        # for i, key_row in enumerate(key_list):
-        #     try:
-        #         raw_key = key_row[system_config.rfig_key_table_index]
-        #         formatted_key = handle_table_row(key_row)
+        # Группируем ключи по id и tip, выбираем самые свежие по tekdat
+        keys_by_id_tip = {}
+        
+        for key_row in all_keys:
+            try:
+                # Получаем id ключа
+                key_id = handle_table_row(key_row)
                 
-        #     except Exception as e:
-        #         logger.error(f"Ошибка при обработке ключа {i+1}: {str(e)}")
+                # Получаем tip (поле может быть пустым или содержать цифру 0-9)
+                tip = key_row[5] if len(key_row) > 5 and key_row[5] is not None else 0
+                if tip == '' or tip is None:
+                    tip = 0
+                try:
+                    tip = int(tip)
+                except (ValueError, TypeError):
+                    tip = 0
+                
+                # Получаем tekdat (дата последнего изменения)
+                tekdat = key_row[6] if len(key_row) > 6 and key_row[6] is not None else datetime.min
+                
+                # Создаем уникальный ключ для группировки по id и tip
+                group_key = (key_id, tip)
+                
+                # Если это первая запись для данной группы или текущая запись более свежая
+                if group_key not in keys_by_id_tip or tekdat > keys_by_id_tip[group_key]['tekdat']:
+                    keys_by_id_tip[group_key] = {
+                        'key_row': key_row,
+                        'tekdat': tekdat,
+                        'key_id': key_id,
+                        'tip': tip
+                    }
+                    
+            except Exception as e:
+                logger.error(f"Ошибка при обработке записи ключа: {str(e)}")
+                continue
         
-        # Создаем словарь ключей точно так же, как в оригинальном коде
-        active_cards = {handle_table_row(key): key for key in key_list}
+        # Фильтруем по датам активности только самые свежие ключи
+        active_key_list = []
+        for group_key, key_data in keys_by_id_tip.items():
+            key_row = key_data['key_row']
+            
+            try:
+                # Проверяем даты активности
+                dstart = key_row[3] if len(key_row) > 3 else None
+                dend = key_row[4] if len(key_row) > 4 else None
+                
+                # Преобразуем строки в datetime объекты для сравнения
+                if isinstance(dstart, str):
+                    dstart = datetime.strptime(dstart, "%Y-%m-%d %H:%M:%S")
+                if isinstance(dend, str):
+                    dend = datetime.strptime(dend, "%Y-%m-%d %H:%M:%S")
+                
+                current_time = datetime.now()
+                
+                # Проверяем, что ключ активен в текущее время
+                if (dstart is None or dstart <= current_time) and (dend is None or dend >= current_time):
+                    active_key_list.append(key_row)
+                    
+            except Exception as e:
+                logger.error(f"Ошибка при проверке дат активности ключа: {str(e)}")
+                continue
         
-        # Логируем итоговый список ключей
-        # logger.info(f"Активные ключи: {list(active_cards.keys())}")
+        logger.info(f"Найдено активных ключей после обработки: {len(active_key_list)}")
+        
+        # Логируем подробную информацию о каждом активном ключе
+        if active_key_list:
+            logger.info("=== АКТИВНЫЕ КЛЮЧИ С ПОЛНОЙ ИНФОРМАЦИЕЙ ===")
+            for i, key_row in enumerate(active_key_list):
+                try:
+                    key_id = handle_table_row(key_row)
+                    tip = key_row[5] if len(key_row) > 5 and key_row[5] is not None else 0
+                    if tip == '' or tip is None:
+                        tip = 0
+                    try:
+                        tip = int(tip)
+                    except (ValueError, TypeError):
+                        tip = 0
+                    
+                    tekdat = key_row[6] if len(key_row) > 6 else 'Нет данных'
+                    dstart = key_row[3] if len(key_row) > 3 else 'Нет данных'
+                    dend = key_row[4] if len(key_row) > 4 else 'Нет данных'
+                    
+                    # Дополнительные поля из базы данных
+                    num = key_row[2] if len(key_row) > 2 else 'Нет данных'
+                    additional_info = f", поля БД: {len(key_row)} полей" if len(key_row) > 7 else ""
+                    
+                    logger.info(f"Ключ #{i+1}: ID={key_id}, TIP={tip}, TEKDAT={tekdat}, DSTART={dstart}, DEND={dend}, NUM={num}{additional_info}")
+                    
+                except Exception as e:
+                    logger.error(f"Ошибка при логировании ключа #{i+1}: {str(e)}")
+            logger.info("=== КОНЕЦ СПИСКА АКТИВНЫХ КЛЮЧЕЙ ===")
+        else:
+            logger.info("Активных ключей не найдено")
+        
+        # Создаем словарь ключей
+        active_cards = {handle_table_row(key): key for key in active_key_list}
         
         # Оригинальный код для обновления rpi
-        if count_keys != len(key_list):
+        if count_keys != len(active_key_list):
             sql_update = "UPDATE table_kluch SET rpi = 1 WHERE num = {room_number}".format(room_number=system_config.room_number)
             cursor.execute(sql_update)
             get_db_connection().commit()
-            count_keys = len(key_list)
+            count_keys = len(active_key_list)
             logger.info("Success update rpi field for new keys")
         
         # Оригинальный код для проверки is_sold
-        if key_list:
+        if active_key_list:
             is_sold = False
-            for key in key_list:
+            for key in active_key_list:
                 card_role = get_card_role(key)
                 
                 if card_role == "User":
@@ -874,6 +953,51 @@ def get_active_cards():
         logger.error(f"Ошибка при получении активных карт: {str(e)}")
         
     return active_cards
+
+
+def log_key_usage(key_row, match_type):
+    """Функция для подробного логирования использования ключа при открытии двери"""
+    try:
+        # Получаем подробную информацию о ключе
+        key_id = handle_table_row(key_row)
+        tip = key_row[5] if len(key_row) > 5 and key_row[5] is not None else 0
+        if tip == '' or tip is None:
+            tip = 0
+        try:
+            tip = int(tip)
+        except (ValueError, TypeError):
+            tip = 0
+        
+        tekdat = key_row[6] if len(key_row) > 6 else 'Нет данных'
+        dstart = key_row[3] if len(key_row) > 3 else 'Нет данных'
+        dend = key_row[4] if len(key_row) > 4 else 'Нет данных'
+        num = key_row[2] if len(key_row) > 2 else 'Нет данных'
+        
+        card_role = get_card_role(key_row)
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Дополнительная информация о всех полях ключа
+        all_fields = ""
+        for i, field in enumerate(key_row):
+            all_fields += f"[{i}]={field}, "
+        all_fields = all_fields.rstrip(", ")
+        
+        card_logger.info("=" * 60)
+        card_logger.info("ДВЕРЬ ОТКРЫТА КЛЮЧОМ!")
+        card_logger.info(f"Время открытия: {current_time}")
+        card_logger.info(f"Способ распознавания: {match_type}")
+        card_logger.info(f"ID ключа: {key_id}")
+        card_logger.info(f"Тип ключа (TIP): {tip}")
+        card_logger.info(f"Роль пользователя: {card_role}")
+        card_logger.info(f"Номер комнаты: {num}")
+        card_logger.info(f"Дата начала действия (DSTART): {dstart}")
+        card_logger.info(f"Дата окончания действия (DEND): {dend}")
+        card_logger.info(f"Дата последнего изменения (TEKDAT): {tekdat}")
+        card_logger.info(f"Все поля БД: {all_fields}")
+        card_logger.info("=" * 60)
+        
+    except Exception as e:
+        card_logger.error(f"Ошибка при логировании использования ключа: {str(e)}")
 
 
 # Обработчик ключа RFID - вызывается из RFIDHandler
@@ -909,19 +1033,19 @@ def handle_rfid_key(key):
         active_key = active_cards[found_key]
         card_role = get_card_role(active_key)
         card_logger.info(f"Обнаружен корректный ключ (через гибкий поиск), роль: {card_role}, ключ: {found_key}")
-        card_logger.info("Открытие двери...")
+        log_key_usage(active_key, "гибкий поиск")
         permit_open_door()
     elif exact_match:
         active_key = active_cards[key]
         card_role = get_card_role(active_key)
         card_logger.info(f"Обнаружен корректный ключ (точное совпадение), роль: {card_role}, ключ: {key}")
-        card_logger.info("Открытие двери...")
+        log_key_usage(active_key, "точное совпадение")
         permit_open_door()
     elif cleaned_match:
         active_key = active_cards[cleaned_key]
         card_role = get_card_role(active_key)
         card_logger.info(f"Обнаружен корректный ключ (после очистки), роль: {card_role}, ключ: {cleaned_key}")
-        card_logger.info("Открытие двери...")
+        log_key_usage(active_key, "после очистки")
         permit_open_door()
     else:
         card_logger.warning(f"Обнаружен неизвестный ключ: {key}")

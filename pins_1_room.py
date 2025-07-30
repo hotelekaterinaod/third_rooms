@@ -872,20 +872,59 @@ def get_active_cards():
                 dstart = key_row[3] if len(key_row) > 3 else None
                 dend = key_row[4] if len(key_row) > 4 else None
                 
-                # Преобразуем строки в datetime объекты для сравнения
-                if isinstance(dstart, str):
-                    dstart = datetime.strptime(dstart, "%Y-%m-%d %H:%M:%S")
-                if isinstance(dend, str):
-                    dend = datetime.strptime(dend, "%Y-%m-%d %H:%M:%S")
+                # Добавляем отладочное логирование типов данных
+                logger.debug(f"Отладка типов данных для ключа {key_data['key_id']}: dstart={dstart} (тип: {type(dstart)}), dend={dend} (тип: {type(dend)})")
                 
                 current_time = datetime.now()
                 
+                # Обработка dstart
+                dstart_datetime = None
+                if dstart is not None:
+                    if isinstance(dstart, str):
+                        try:
+                            dstart_datetime = datetime.strptime(dstart, "%Y-%m-%d %H:%M:%S")
+                        except ValueError:
+                            logger.warning(f"Неверный формат dstart: {dstart}")
+                            dstart_datetime = None
+                    elif isinstance(dstart, datetime):
+                        dstart_datetime = dstart
+                    elif isinstance(dstart, bool):
+                        # Если это bool, пропускаем проверку dstart
+                        dstart_datetime = None
+                    else:
+                        logger.warning(f"Неизвестный тип dstart: {type(dstart)}, значение: {dstart}")
+                        dstart_datetime = None
+                
+                # Обработка dend
+                dend_datetime = None
+                if dend is not None:
+                    if isinstance(dend, str):
+                        try:
+                            dend_datetime = datetime.strptime(dend, "%Y-%m-%d %H:%M:%S")
+                        except ValueError:
+                            logger.warning(f"Неверный формат dend: {dend}")
+                            dend_datetime = None
+                    elif isinstance(dend, datetime):
+                        dend_datetime = dend
+                    elif isinstance(dend, bool):
+                        # Если это bool, пропускаем проверку dend
+                        dend_datetime = None
+                    else:
+                        logger.warning(f"Неизвестный тип dend: {type(dend)}, значение: {dend}")
+                        dend_datetime = None
+                
                 # Проверяем, что ключ активен в текущее время
-                if (dstart is None or dstart <= current_time) and (dend is None or dend >= current_time):
+                start_valid = dstart_datetime is None or dstart_datetime <= current_time
+                end_valid = dend_datetime is None or dend_datetime >= current_time
+                
+                if start_valid and end_valid:
                     active_key_list.append(key_row)
+                    logger.debug(f"Ключ {key_data['key_id']} прошел проверку дат активности")
+                else:
+                    logger.debug(f"Ключ {key_data['key_id']} не прошел проверку дат: start_valid={start_valid}, end_valid={end_valid}")
                     
             except Exception as e:
-                logger.error(f"Ошибка при проверке дат активности ключа: {str(e)}")
+                logger.error(f"Ошибка при проверке дат активности ключа {key_data.get('key_id', 'неизвестен')}: {str(e)}")
                 continue
         
         logger.info(f"Найдено активных ключей после обработки: {len(active_key_list)}")

@@ -141,7 +141,7 @@ def get_active_cards():
         WHERE num = {room_number}
         """.format(room_number=system_config.room_number)
         logger.info(f"SQL запрос для получения всех ключей: {sql}")
-        
+
         cursor.execute(sql)
         all_keys = cursor.fetchall()
         

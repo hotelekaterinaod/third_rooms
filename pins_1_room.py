@@ -121,22 +121,174 @@ def get_db_connection():
 
 @retry(tries=3, delay=1)
 def get_active_cards():
+    """
+    Получение активных карт с новой логикой отбора:
+    
+    1. Группируем ключи только по типу (tip: 0-9)
+    2. Для каждого типа выбираем ключ с самой свежей датой tekdat
+    3. Максимум может быть 10 активных ключей (по одному на каждый тип)
+    4. Затем фильтруем по датам активности (dstart <= now <= dend)
+    """
     global active_cards, count_keys
-    cursor = get_db_connection().cursor()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    sql = "SELECT * FROM table_kluch WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
-          "room_number}".format(now=now, room_number=system_config.room_number)
-    cursor.execute(sql)
-    key_list = cursor.fetchall()
-    active_cards = {handle_table_row(key): key for key in key_list}
-
-    if count_keys != len(key_list):
-        sql_update = "UPDATE table_kluch SET rpi = 1 WHERE dstart <= '{now}' AND dend >= '{now}' AND num = {" \
-                     "room_number}".format(now=now, room_number=system_config.room_number)
-        cursor.execute(sql_update)
-        get_db_connection().commit()
-        count_keys = len(key_list)
-        logger.info("Success update rpi field for new keys")
+    
+    try:
+        cursor = get_db_connection().cursor()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Получаем все записи ключей для комнаты (без фильтрации по датам)
+        sql = """
+        SELECT * FROM table_kluch 
+        WHERE num = {room_number}
+        """.format(room_number=system_config.room_number)
+        logger.info(f"SQL запрос для получения всех ключей: {sql}")
+        
+        cursor.execute(sql)
+        all_keys = cursor.fetchall()
+        
+        logger.info(f"Найдено всего записей ключей для комнаты {system_config.room_number}: {len(all_keys)}")
+        logger.info("Применяем новую логику отбора: группировка по tip (0-9), выбор самых свежих по tekdat")
+        
+        # Группируем ключи только по tip, выбираем самые свежие по tekdat
+        keys_by_tip = {}
+        
+        for key_row in all_keys:
+            try:
+                # Получаем id ключа (для логирования)
+                key_id = handle_table_row(key_row)
+                
+                # Получаем tip (поле может быть пустым или содержать цифру 0-9)
+                tip = key_row[5] if len(key_row) > 5 and key_row[5] is not None else 0
+                if tip == '' or tip is None:
+                    tip = 0
+                try:
+                    tip = int(tip)
+                except (ValueError, TypeError):
+                    tip = 0
+                
+                # Получаем tekdat (дата последнего изменения)
+                tekdat = key_row[6] if len(key_row) > 6 and key_row[6] is not None else datetime.min
+                
+                # Группируем только по tip (максимум 10 типов: 0-9)
+                # Если это первая запись для данного tip или текущая запись более свежая
+                if tip not in keys_by_tip or tekdat > keys_by_tip[tip]['tekdat']:
+                    keys_by_tip[tip] = {
+                        'key_row': key_row,
+                        'tekdat': tekdat,
+                        'key_id': key_id,
+                        'tip': tip
+                    }
+                    logger.debug(f"Обновлен актуальный ключ для tip {tip}: key_id={key_id}, tekdat={tekdat}")
+                    
+            except Exception as e:
+                logger.error(f"Ошибка при обработке записи ключа: {str(e)}")
+                continue
+        
+        logger.info(f"Найдено уникальных типов ключей (tip): {len(keys_by_tip)} из возможных 10 (0-9)")
+        
+        # Фильтруем по датам активности только самые свежие ключи для каждого типа
+        active_key_list = []
+        for tip, key_data in keys_by_tip.items():
+            key_row = key_data['key_row']
+            
+            try:
+                # Проверяем даты активности (правильная индексация)
+                dstart = key_row[2] if len(key_row) > 2 else None
+                dend = key_row[3] if len(key_row) > 3 else None
+                
+                current_time = datetime.now()
+                
+                # Обработка dstart
+                dstart_datetime = None
+                if dstart is not None:
+                    if isinstance(dstart, str):
+                        try:
+                            dstart_datetime = datetime.strptime(dstart, "%Y-%m-%d %H:%M:%S")
+                        except ValueError:
+                            logger.warning(f"Неверный формат dstart: {dstart}")
+                            dstart_datetime = None
+                    elif isinstance(dstart, datetime):
+                        dstart_datetime = dstart
+                    else:
+                        logger.warning(f"Неизвестный тип dstart: {type(dstart)}, значение: {dstart}")
+                        dstart_datetime = None
+                
+                # Обработка dend
+                dend_datetime = None
+                if dend is not None:
+                    if isinstance(dend, str):
+                        try:
+                            dend_datetime = datetime.strptime(dend, "%Y-%m-%d %H:%M:%S")
+                        except ValueError:
+                            logger.warning(f"Неверный формат dend: {dend}")
+                            dend_datetime = None
+                    elif isinstance(dend, datetime):
+                        dend_datetime = dend
+                    else:
+                        logger.warning(f"Неизвестный тип dend: {type(dend)}, значение: {dend}")
+                        dend_datetime = None
+                
+                # Проверяем, что ключ активен в текущее время
+                start_valid = dstart_datetime is None or dstart_datetime <= current_time
+                end_valid = dend_datetime is None or dend_datetime >= current_time
+                
+                if start_valid and end_valid:
+                    active_key_list.append(key_row)
+                    logger.debug(f"Ключ {key_data['key_id']} (tip: {key_data['tip']}) прошел проверку дат активности")
+                else:
+                    logger.debug(f"Ключ {key_data['key_id']} (tip: {key_data['tip']}) не прошел проверку дат: start_valid={start_valid}, end_valid={end_valid}")
+                    
+            except Exception as e:
+                logger.error(f"Ошибка при проверке дат активности ключа {key_data.get('key_id', 'неизвестен')}: {str(e)}")
+                continue
+        
+        logger.info(f"Найдено активных ключей после обработки: {len(active_key_list)}")
+        
+        # Логируем подробную информацию о каждом активном ключе
+        if active_key_list:
+            logger.info("=== АКТИВНЫЕ КЛЮЧИ С ПОЛНОЙ ИНФОРМАЦИЕЙ ===")
+            logger.info(f"Всего активных типов ключей: {len(active_key_list)} из 10 возможных (tip: 0-9)")
+            for i, key_row in enumerate(active_key_list):
+                try:
+                    key_id = handle_table_row(key_row)
+                    tip = key_row[5] if len(key_row) > 5 and key_row[5] is not None else 0
+                    if tip == '' or tip is None:
+                        tip = 0
+                    try:
+                        tip = int(tip)
+                    except (ValueError, TypeError):
+                        tip = 0
+                    
+                    tekdat = key_row[6] if len(key_row) > 6 else 'Нет данных'
+                    dstart = key_row[2] if len(key_row) > 2 else 'Нет данных'
+                    dend = key_row[3] if len(key_row) > 3 else 'Нет данных'
+                    
+                    # Дополнительные поля из базы данных
+                    num = key_row[0] if len(key_row) > 0 else 'Нет данных'
+                    additional_info = f", поля БД: {len(key_row)} полей" if len(key_row) > 7 else ""
+                    
+                    logger.info(f"Ключ TIP #{tip}: ID={key_id}, TEKDAT={tekdat}, DSTART={dstart}, DEND={dend}, NUM={num}{additional_info}")
+                    
+                except Exception as e:
+                    logger.error(f"Ошибка при логировании ключа #{i+1}: {str(e)}")
+            logger.info("=== КОНЕЦ СПИСКА АКТИВНЫХ КЛЮЧЕЙ ===")
+        else:
+            logger.info("Активных ключей не найдено")
+        
+        # Создаем словарь ключей
+        active_cards = {handle_table_row(key): key for key in active_key_list}
+        
+        # Оригинальный код для обновления rpi
+        if count_keys != len(active_key_list):
+            sql_update = "UPDATE table_kluch SET rpi = 1 WHERE num = {room_number}".format(room_number=system_config.room_number)
+            cursor.execute(sql_update)
+            get_db_connection().commit()
+            count_keys = len(active_key_list)
+            logger.info("Success update rpi field for new keys")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при получении активных карт: {str(e)}")
+        
+    return active_cards
 
 
 @retry(tries=10, delay=1)

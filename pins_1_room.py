@@ -808,6 +808,14 @@ def turn_everything_off():
 
 @retry(tries=3, delay=1)
 def get_active_cards():
+    """
+    Получение активных карт с новой логикой отбора:
+    
+    1. Группируем ключи только по типу (tip: 0-9)
+    2. Для каждого типа выбираем ключ с самой свежей датой tekdat
+    3. Максимум может быть 10 активных ключей (по одному на каждый тип)
+    4. Затем фильтруем по датам активности (dstart <= now <= dend)
+    """
     global active_cards, count_keys, is_sold, prev_is_sold
     
     try:
@@ -825,13 +833,14 @@ def get_active_cards():
         all_keys = cursor.fetchall()
         
         logger.info(f"Найдено всего записей ключей для комнаты {system_config.room_number}: {len(all_keys)}")
+        logger.info("Применяем новую логику отбора: группировка по tip (0-9), выбор самых свежих по tekdat")
         
-        # Группируем ключи по id и tip, выбираем самые свежие по tekdat
-        keys_by_id_tip = {}
+        # Группируем ключи только по tip, выбираем самые свежие по tekdat
+        keys_by_tip = {}
         
         for key_row in all_keys:
             try:
-                # Получаем id ключа
+                # Получаем id ключа (для логирования)
                 key_id = handle_table_row(key_row)
                 
                 # Получаем tip (поле может быть пустым или содержать цифру 0-9)
@@ -846,25 +855,26 @@ def get_active_cards():
                 # Получаем tekdat (дата последнего изменения)
                 tekdat = key_row[6] if len(key_row) > 6 and key_row[6] is not None else datetime.min
                 
-                # Создаем уникальный ключ для группировки по id и tip
-                group_key = (key_id, tip)
-                
-                # Если это первая запись для данной группы или текущая запись более свежая
-                if group_key not in keys_by_id_tip or tekdat > keys_by_id_tip[group_key]['tekdat']:
-                    keys_by_id_tip[group_key] = {
+                # Группируем только по tip (максимум 10 типов: 0-9)
+                # Если это первая запись для данного tip или текущая запись более свежая
+                if tip not in keys_by_tip or tekdat > keys_by_tip[tip]['tekdat']:
+                    keys_by_tip[tip] = {
                         'key_row': key_row,
                         'tekdat': tekdat,
                         'key_id': key_id,
                         'tip': tip
                     }
+                    logger.debug(f"Обновлен актуальный ключ для tip {tip}: key_id={key_id}, tekdat={tekdat}")
                     
             except Exception as e:
                 logger.error(f"Ошибка при обработке записи ключа: {str(e)}")
                 continue
         
-        # Фильтруем по датам активности только самые свежие ключи
+        logger.info(f"Найдено уникальных типов ключей (tip): {len(keys_by_tip)} из возможных 10 (0-9)")
+        
+        # Фильтруем по датам активности только самые свежие ключи для каждого типа
         active_key_list = []
-        for group_key, key_data in keys_by_id_tip.items():
+        for tip, key_data in keys_by_tip.items():
             key_row = key_data['key_row']
             
             try:
@@ -919,9 +929,9 @@ def get_active_cards():
                 
                 if start_valid and end_valid:
                     active_key_list.append(key_row)
-                    logger.debug(f"Ключ {key_data['key_id']} прошел проверку дат активности")
+                    logger.debug(f"Ключ {key_data['key_id']} (tip: {key_data['tip']}) прошел проверку дат активности")
                 else:
-                    logger.debug(f"Ключ {key_data['key_id']} не прошел проверку дат: start_valid={start_valid}, end_valid={end_valid}")
+                    logger.debug(f"Ключ {key_data['key_id']} (tip: {key_data['tip']}) не прошел проверку дат: start_valid={start_valid}, end_valid={end_valid}")
                     
             except Exception as e:
                 logger.error(f"Ошибка при проверке дат активности ключа {key_data.get('key_id', 'неизвестен')}: {str(e)}")
@@ -932,6 +942,7 @@ def get_active_cards():
         # Логируем подробную информацию о каждом активном ключе
         if active_key_list:
             logger.info("=== АКТИВНЫЕ КЛЮЧИ С ПОЛНОЙ ИНФОРМАЦИЕЙ ===")
+            logger.info(f"Всего активных типов ключей: {len(active_key_list)} из 10 возможных (tip: 0-9)")
             for i, key_row in enumerate(active_key_list):
                 try:
                     key_id = handle_table_row(key_row)
@@ -951,7 +962,7 @@ def get_active_cards():
                     num = key_row[0] if len(key_row) > 0 else 'Нет данных'
                     additional_info = f", поля БД: {len(key_row)} полей" if len(key_row) > 7 else ""
                     
-                    logger.info(f"Ключ #{i+1}: ID={key_id}, TIP={tip}, TEKDAT={tekdat}, DSTART={dstart}, DEND={dend}, NUM={num}{additional_info}")
+                    logger.info(f"Ключ TIP #{tip}: ID={key_id}, TEKDAT={tekdat}, DSTART={dstart}, DEND={dend}, NUM={num}{additional_info}")
                     
                 except Exception as e:
                     logger.error(f"Ошибка при логировании ключа #{i+1}: {str(e)}")

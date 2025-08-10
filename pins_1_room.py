@@ -140,12 +140,13 @@ def get_active_cards():
         SELECT * FROM table_kluch 
         WHERE num = {room_number}
         """.format(room_number=system_config.room_number)
-        logger.info(f"SQL запрос для получения всех ключей: {sql}")
+        logger.info("SQL запрос для получения всех ключей: {sql}".format(sql=sql))
 
         cursor.execute(sql)
         all_keys = cursor.fetchall()
         
-        logger.info(f"Найдено всего записей ключей для комнаты {system_config.room_number}: {len(all_keys)}")
+        logger.info("Найдено всего записей ключей для комнаты {room_number}: {count}".format(
+            room_number=system_config.room_number, count=len(all_keys)))
         logger.info("Применяем новую логику отбора: группировка по tip (0-9), выбор самых свежих по tekdat")
         
         # Группируем ключи только по tip, выбираем самые свежие по tekdat
@@ -177,13 +178,15 @@ def get_active_cards():
                         'key_id': key_id,
                         'tip': tip
                     }
-                    logger.debug(f"Обновлен актуальный ключ для tip {tip}: key_id={key_id}, tekdat={tekdat}")
+                    logger.debug("Обновлен актуальный ключ для tip {tip}: key_id={key_id}, tekdat={tekdat}".format(
+                        tip=tip, key_id=key_id, tekdat=tekdat))
                     
             except Exception as e:
-                logger.error(f"Ошибка при обработке записи ключа: {str(e)}")
+                logger.error("Ошибка при обработке записи ключа: {error}".format(error=str(e)))
                 continue
         
-        logger.info(f"Найдено уникальных типов ключей (tip): {len(keys_by_tip)} из возможных 10 (0-9)")
+        logger.info("Найдено уникальных типов ключей (tip): {count} из возможных 10 (0-9)".format(
+            count=len(keys_by_tip)))
         
         # Фильтруем по датам активности только самые свежие ключи для каждого типа
         active_key_list = []
@@ -204,12 +207,13 @@ def get_active_cards():
                         try:
                             dstart_datetime = datetime.strptime(dstart, "%Y-%m-%d %H:%M:%S")
                         except ValueError:
-                            logger.warning(f"Неверный формат dstart: {dstart}")
+                            logger.warning("Неверный формат dstart: {dstart}".format(dstart=dstart))
                             dstart_datetime = None
                     elif isinstance(dstart, datetime):
                         dstart_datetime = dstart
                     else:
-                        logger.warning(f"Неизвестный тип dstart: {type(dstart)}, значение: {dstart}")
+                        logger.warning("Неизвестный тип dstart: {dtype}, значение: {value}".format(
+                            dtype=type(dstart), value=dstart))
                         dstart_datetime = None
                 
                 # Обработка dend
@@ -219,12 +223,13 @@ def get_active_cards():
                         try:
                             dend_datetime = datetime.strptime(dend, "%Y-%m-%d %H:%M:%S")
                         except ValueError:
-                            logger.warning(f"Неверный формат dend: {dend}")
+                            logger.warning("Неверный формат dend: {dend}".format(dend=dend))
                             dend_datetime = None
                     elif isinstance(dend, datetime):
                         dend_datetime = dend
                     else:
-                        logger.warning(f"Неизвестный тип dend: {type(dend)}, значение: {dend}")
+                        logger.warning("Неизвестный тип dend: {dtype}, значение: {value}".format(
+                            dtype=type(dend), value=dend))
                         dend_datetime = None
                 
                 # Проверяем, что ключ активен в текущее время
@@ -233,20 +238,24 @@ def get_active_cards():
                 
                 if start_valid and end_valid:
                     active_key_list.append(key_row)
-                    logger.debug(f"Ключ {key_data['key_id']} (tip: {key_data['tip']}) прошел проверку дат активности")
+                    logger.debug("Ключ {key_id} (tip: {tip}) прошел проверку дат активности".format(
+                        key_id=key_data['key_id'], tip=key_data['tip']))
                 else:
-                    logger.debug(f"Ключ {key_data['key_id']} (tip: {key_data['tip']}) не прошел проверку дат: start_valid={start_valid}, end_valid={end_valid}")
+                    logger.debug("Ключ {key_id} (tip: {tip}) не прошел проверку дат: start_valid={start_valid}, end_valid={end_valid}".format(
+                        key_id=key_data['key_id'], tip=key_data['tip'], start_valid=start_valid, end_valid=end_valid))
                     
             except Exception as e:
-                logger.error(f"Ошибка при проверке дат активности ключа {key_data.get('key_id', 'неизвестен')}: {str(e)}")
+                logger.error("Ошибка при проверке дат активности ключа {key_id}: {error}".format(
+                    key_id=key_data.get('key_id', 'неизвестен'), error=str(e)))
                 continue
         
-        logger.info(f"Найдено активных ключей после обработки: {len(active_key_list)}")
+        logger.info("Найдено активных ключей после обработки: {count}".format(count=len(active_key_list)))
         
         # Логируем подробную информацию о каждом активном ключе
         if active_key_list:
             logger.info("=== АКТИВНЫЕ КЛЮЧИ С ПОЛНОЙ ИНФОРМАЦИЕЙ ===")
-            logger.info(f"Всего активных типов ключей: {len(active_key_list)} из 10 возможных (tip: 0-9)")
+            logger.info("Всего активных типов ключей: {count} из 10 возможных (tip: 0-9)".format(
+                count=len(active_key_list)))
             for i, key_row in enumerate(active_key_list):
                 try:
                     key_id = handle_table_row(key_row)
@@ -264,12 +273,13 @@ def get_active_cards():
                     
                     # Дополнительные поля из базы данных
                     num = key_row[0] if len(key_row) > 0 else 'Нет данных'
-                    additional_info = f", поля БД: {len(key_row)} полей" if len(key_row) > 7 else ""
+                    additional_info = ", поля БД: {fields} полей".format(fields=len(key_row)) if len(key_row) > 7 else ""
                     
-                    logger.info(f"Ключ TIP #{tip}: ID={key_id}, TEKDAT={tekdat}, DSTART={dstart}, DEND={dend}, NUM={num}{additional_info}")
+                    logger.info("Ключ TIP #{tip}: ID={key_id}, TEKDAT={tekdat}, DSTART={dstart}, DEND={dend}, NUM={num}{additional_info}".format(
+                        tip=tip, key_id=key_id, tekdat=tekdat, dstart=dstart, dend=dend, num=num, additional_info=additional_info))
                     
                 except Exception as e:
-                    logger.error(f"Ошибка при логировании ключа #{i+1}: {str(e)}")
+                    logger.error("Ошибка при логировании ключа #{index}: {error}".format(index=i+1, error=str(e)))
             logger.info("=== КОНЕЦ СПИСКА АКТИВНЫХ КЛЮЧЕЙ ===")
         else:
             logger.info("Активных ключей не найдено")
@@ -286,7 +296,7 @@ def get_active_cards():
             logger.info("Success update rpi field for new keys")
         
     except Exception as e:
-        logger.error(f"Ошибка при получении активных карт: {str(e)}")
+        logger.error("Ошибка при получении активных карт: {error}".format(error=str(e)))
         
     return active_cards
 
@@ -303,9 +313,9 @@ def wait_rfid():
             logger.info("key catched {key} {datetime}".format(key=key_, datetime=datetime.utcnow()))
             return key_
         else:
-            logger.info(f"No key {key_}")
+            logger.info("No key {key}".format(key=key_))
     except Exception as e:
-        print(f"Error in rfid {e}")
+        print("Error in rfid {error}".format(error=e))
         pass
 
 

@@ -990,16 +990,9 @@ def get_active_cards():
 
         if keys_for_rpi_update:
             logger.info("Будет обновлено rpi для {cnt} записей".format(cnt=len(keys_for_rpi_update)))
-            for num_val, id_val in keys_for_rpi_update:
-                sql_update = "UPDATE table_kluch SET rpi = 1 WHERE num = {num} AND id = '{id}'".format(
-                    num=num_val,
-                    id=str(id_val).strip()
-                )
-                try:
-                    cursor.execute(sql_update)
-                except Exception as e:
-                    logger.error("Ошибка UPDATE rpi для id {id}: {err}".format(id=id_val, err=str(e)))
+            sql_update = "UPDATE table_kluch SET rpi = 1 WHERE num = {room_number}".format(room_number=system_config.room_number)
             try:
+                cursor.execute(sql_update)
                 get_db_connection().commit()
                 logger.info("Success update rpi for changed rows")
             except Exception as e:

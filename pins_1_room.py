@@ -973,13 +973,42 @@ def get_active_cards():
         # Создаем словарь ключей
         active_cards = {handle_table_row(key): key for key in active_key_list}
         
-        # Оригинальный код для обновления rpi
-        if count_keys != len(active_key_list):
-            sql_update = "UPDATE table_kluch SET rpi = 1 WHERE num = {room_number}".format(room_number=system_config.room_number)
-            cursor.execute(sql_update)
-            get_db_connection().commit()
-            count_keys = len(active_key_list)
-            logger.info("Success update rpi field for new keys")
+        keys_for_rpi_update = []
+        for key_row in all_keys:
+            try:
+                rpi_val = key_row[8] if len(key_row) > 8 else None
+                if rpi_val != 1:
+                    num_val = key_row[0] if len(key_row) > 0 else None
+                    id_val = key_row[1] if len(key_row) > 1 else None
+                    if num_val is None or id_val is None:
+                        logger.warning("Пропуск rpi update: отсутствует num или id (index0/index1)")
+                        continue
+                    keys_for_rpi_update.append((num_val, id_val))
+            except Exception as e:
+                logger.error("Ошибка анализа строки для rpi update: {err}".format(err=str(e)))
+                continue
+
+        if keys_for_rpi_update:
+            logger.info("Будет обновлено rpi для {cnt} записей".format(cnt=len(keys_for_rpi_update)))
+            for num_val, id_val in keys_for_rpi_update:
+                sql_update = "UPDATE table_kluch SET rpi = 1 WHERE num = {num} AND id = '{id}'".format(
+                    num=num_val,
+                    id=str(id_val).strip()
+                )
+                try:
+                    cursor.execute(sql_update)
+                except Exception as e:
+                    logger.error("Ошибка UPDATE rpi для id {id}: {err}".format(id=id_val, err=str(e)))
+            try:
+                get_db_connection().commit()
+                logger.info("Success update rpi for changed rows")
+            except Exception as e:
+                logger.error("Commit error after rpi bulk updates: {err}".format(err=str(e)))
+        else:
+            logger.debug("Нет строк для обновления rpi")
+
+        # Сохраняем количество активных ключей (по типам) для диагностики
+        count_keys = len(active_key_list)
         
         # Оригинальный код для проверки is_sold
         if active_key_list:

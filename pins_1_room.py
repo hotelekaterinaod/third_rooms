@@ -41,7 +41,6 @@ logger.info(str(bin(data1)))
 
 active_cards = {}
 active_key = None
-last_tekdat_by_tip = {}  # tip -> datetime объекта последнего tekdat, для отслеживания новых записей
 
 GPIO.setmode(GPIO.BCM)
 
@@ -285,92 +284,43 @@ def get_active_cards():
         else:
             logger.info("Активных ключей не найдено")
         
-        # Создаем словарь ключей
         active_cards = {handle_table_row(key): key for key in active_key_list}
         
-        # Новый блок обновления rpi только для действительно новых записей (по более свежей tekdat)
-        # Логика:
-        # 1. Для каждого tip есть один актуальный ключ (active_key_list уже отфильтрован).
-        # 2. Сравниваем tekdat с сохраненным last_tekdat_by_tip[tip]. Если tekdat строго больше – считаем запись новой.
-        # 3. Обновляем rpi = 1 только для новых записей (и НЕ трогаем остальные, чтобы не делать лишний UPDATE).
-        # 4. Первое заполнение словаря (при старте) не делает UPDATE, чтобы не помечать все старое как "новое".
-        updates_needed = []
-        for key_row in active_key_list:
+        keys_for_rpi_update = []
+        for key_row in all_keys:
             try:
-                tip_val = key_row[5] if len(key_row) > 5 and key_row[5] is not None else 0
-                if tip_val == '' or tip_val is None:
-                    tip_val = 0
-                try:
-                    tip_val = int(tip_val)
-                except (ValueError, TypeError):
-                    tip_val = 0
-                tekdat_val = key_row[6] if len(key_row) > 6 else None
-                # Проверяем тип tekdat
-                if isinstance(tekdat_val, str):
-                    # Попытка парса строковой даты
-                    try:
-                        tekdat_parsed = datetime.strptime(tekdat_val, "%Y-%m-%d %H:%M:%S")
-                    except ValueError:
-                        # Если формат иной – пропускаем обновление для этой записи
-                        logger.warning("Неверный формат tekdat для tip {tip}: {val}".format(tip=tip_val, val=tekdat_val))
+                rpi_val = key_row[8] if len(key_row) > 8 else None
+                if rpi_val != 1:
+                    num_val = key_row[0] if len(key_row) > 0 else None
+                    id_val = key_row[1] if len(key_row) > 1 else None
+                    if num_val is None or id_val is None:
+                        logger.warning("Пропуск rpi update: отсутствует num или id (index0/index1)")
                         continue
-                elif isinstance(tekdat_val, datetime):
-                    tekdat_parsed = tekdat_val
-                else:
-                    # Неизвестный тип – пропускаем
-                    logger.warning("Неизвестный тип tekdat для tip {tip}: {t}".format(tip=tip_val, t=type(tekdat_val)))
-                    continue
-
-                previous_tekdat = last_tekdat_by_tip.get(tip_val)
-                if previous_tekdat is None:
-                    # Первый раз видим этот tip – просто фиксируем, без UPDATE
-                    last_tekdat_by_tip[tip_val] = tekdat_parsed
-                else:
-                    if tekdat_parsed > previous_tekdat:
-                        # Новая (более свежая) запись по этому tip
-                        # Для точечного UPDATE используем num (index0) и id (index1)
-                        num_val = key_row[0] if len(key_row) > 0 else None
-                        id_val = key_row[1] if len(key_row) > 1 else None
-                        if id_val is None or num_val is None:
-                            logger.warning("Невозможно обновить rpi – отсутствует num или id для tip {tip}".format(tip=tip_val))
-                        else:
-                            updates_needed.append((num_val, id_val, tip_val, tekdat_parsed))
-                            # Обновим локально tekdat сразу, чтобы не задвоить при следующем проходе
-                            last_tekdat_by_tip[tip_val] = tekdat_parsed
-                    # Если tekdat_parsed <= previous_tekdat – ничего не делаем
+                    keys_for_rpi_update.append((num_val, id_val))
             except Exception as e:
-                logger.error("Ошибка при подготовке обновления rpi: {err}".format(err=str(e)))
+                logger.error("Ошибка анализа строки для rpi update: {err}".format(err=str(e)))
                 continue
 
-        if updates_needed:
-            logger.info("Обнаружены новые записи по tip (обновление rpi): {tips}".format(
-                tips=", ".join(str(item[2]) for item in updates_needed)))
-            for num_val, id_val, tip_val, tekdat_parsed in updates_needed:
-                # Формируем строковое представление tekdat для условия (если нужно уточнение)
-                tekdat_str = tekdat_parsed.strftime("%Y-%m-%d %H:%M:%S")
-                # UPDATE по num и id; при необходимости можно добавить tekdat в WHERE для дополнительной точности
-                sql_update = (
-                    "UPDATE table_kluch SET rpi = 1 WHERE num = {num} AND id = '{id}'".format(
-                        num=num_val,
-                        id=str(id_val).strip()
-                    )
+        if keys_for_rpi_update:
+            logger.info("Будет обновлено rpi для {cnt} записей".format(cnt=len(keys_for_rpi_update)))
+            for num_val, id_val in keys_for_rpi_update:
+                sql_update = "UPDATE table_kluch SET rpi = 1 WHERE num = {num} AND id = '{id}'".format(
+                    num=num_val,
+                    id=str(id_val).strip()
                 )
                 try:
                     cursor.execute(sql_update)
-                    logger.debug("UPDATE rpi выполнен для tip {tip}, id {id}, tekdat {tekdat}".format(
-                        tip=tip_val, id=id_val, tekdat=tekdat_str))
                 except Exception as e:
-                    logger.error("Ошибка UPDATE rpi для tip {tip}, id {id}: {err}".format(
-                        tip=tip_val, id=id_val, err=str(e)))
+                    logger.error("Ошибка UPDATE rpi для id {id}: {err}".format(id=id_val, err=str(e)))
             try:
                 get_db_connection().commit()
-                logger.info("Success update rpi for new keys (по свежей tekdat)")
+                logger.info("Success update rpi for changed rows")
             except Exception as e:
-                logger.error("Commit error after rpi updates: {err}".format(err=str(e)))
+                logger.error("Commit error after rpi bulk updates: {err}".format(err=str(e)))
         else:
-            logger.debug("Нет новых tekdat – rpi не обновлялся")
+            logger.debug("Нет строк для обновления rpi")
 
-        # Обновляем count_keys как текущее число активных типов (для возможной внешней диагностики)
+        # Сохраняем количество активных ключей (по типам) для диагностики
         count_keys = len(active_key_list)
         
     except Exception as e:

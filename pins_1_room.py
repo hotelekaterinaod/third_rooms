@@ -784,10 +784,33 @@ def handle_table_row(row_):
 
 
 def get_db_connection():
+    """
+    Получить подключение к БД с автоматическим переподключением
+    при обрыве соединения
+    """
     global db_connection
-    if db_connection is None:
+    
+    try:
+        # Проверяем существует ли соединение и живо ли оно
+        if db_connection is not None:
+            # Пробуем выполнить простой запрос для проверки
+            cursor = db_connection.cursor()
+            cursor.execute("SELECT 1")
+            cursor.close()
+            return db_connection
+    except Exception as e:
+        # Соединение мертвое, нужно пересоздать
+        logger.warning("Соединение с БД потеряно, переподключение... Ошибка: {}".format(str(e)))
+        db_connection = None
+    
+    # Создаем новое соединение
+    try:
         db_connection = pymssql.connect(**system_config.db_config.__dict__)
-    return db_connection
+        logger.info("Соединение с БД успешно установлено")
+        return db_connection
+    except Exception as e:
+        logger.error("Не удалось подключиться к БД: {}".format(str(e)))
+        raise
 
 
 

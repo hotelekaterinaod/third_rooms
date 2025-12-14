@@ -93,6 +93,7 @@ is_empty = True
 timer_thread = None
 off_timer_thread = None
 second_light_thread = None
+gpio_locked = False
 
 db_connection = None
 
@@ -393,6 +394,8 @@ def f_before_lock_door_from_inside(self):
 
 # GPIO_24 callback (проверка сработки "язычка" на открытие)
 def f_lock_latch(self):
+    if gpio_locked:
+        return
     time.sleep(1)
     logger.info("Lock latch")
     # close_door()
@@ -400,6 +403,8 @@ def f_lock_latch(self):
 
 # GPIO_18 callback (использование ключа)
 def f_using_key(self):
+    if gpio_locked:
+        return
     logger.info("Use key")
 
 
@@ -506,13 +511,17 @@ def rfid_thread_function():
 
 
 def turn_on(type = 1):
-    global lighting_bl, lighting_br, lighting_main
+    global lighting_bl, lighting_br, lighting_main, gpio_locked
     logger.info("Turn everything on")
-    relay1_controller.clear_bit(5)  # Группа - R2 (KG0)
-    relay2_controller.clear_bit(2)  # Соленоиды (KG1:IN3)
-    relay2_controller.clear_bit(1)  # Группа - R3 (свет) (KG1:IN2)
-    #if type == 1:
-    #   start_timer(timer_turn_everything_off)
+    gpio_locked = True
+    relay1_controller.clear_bit(5)
+    time.sleep(0.5)
+    relay2_controller.clear_bit(2)
+    time.sleep(0.3)
+    relay2_controller.clear_bit(1)
+    time.sleep(0.5)
+    gpio_locked = False
+    logger.info("Turn everything on - complete")
 
 
 # GPIO_22 callback картоприемник
@@ -540,12 +549,16 @@ def f_card_key(self):
 
 # GPIO_27 callback цепь автоматов
 def f_circuit_breaker(self):
+    if gpio_locked:
+        return
     logger.info("Curcuit breaker")
     pass
 
 
 # GPIO_17 callback контроль наличия питания R3 (освещения)
 def f_energy_sensor(self):
+    if gpio_locked:
+        return
     logger.info("Energy sensor work")
 
 
@@ -674,20 +687,17 @@ def init_room():
         15: None,
         16: PinController(16, f_switch_main, react_on=GPIO.FALLING, bouncetime=80),
         # кнопка-выключатель основного света спальня1
-        17: PinController(17, f_energy_sensor, up_down=GPIO.PUD_DOWN, react_on=GPIO.RISING),
-        # (контроль наличия питания R3 (освещения))
-        18: PinController(18, f_using_key),  # (открытие замка механическим ключем)
+        17: PinController(17, f_energy_sensor, up_down=GPIO.PUD_DOWN, react_on=GPIO.RISING, bouncetime=200),
+        18: PinController(18, f_using_key, bouncetime=200),
         19: PinController(19, f_fire_detector2),  # (датчик дыма 2)
         20: PinController(20, f_window1),  # (окно1-балкон)
         21: PinController(21, f_flooding_sensor),  # (датчик затопления ВЩ)
         22: PinController(22, f_card_key, react_on=GPIO.FALLING, up_down=GPIO.PUD_UP, before_callback=cardreader_before),  # картоприемник
-        23: PinController(23, f_lock_door_from_inside, before_callback=f_before_lock_door_from_inside),
-        # замок "запрет"
-        24: PinController(24, f_lock_latch),  # замок сработка "язычка"
+        23: PinController(23, f_lock_door_from_inside, before_callback=f_before_lock_door_from_inside, bouncetime=200),
+        24: PinController(24, f_lock_latch, bouncetime=200),
         25: PinController(25, f_fire_detector1),  # датчик дыма 1
         26: PinController(26, f_fire_detector3),  # датчик дыма 3
-        27: PinController(27, f_circuit_breaker, up_down=GPIO.PUD_DOWN, react_on=GPIO.RISING),
-        # (цепь допконтактов автоматов)
+        27: PinController(27, f_circuit_breaker, up_down=GPIO.PUD_DOWN, react_on=GPIO.RISING, bouncetime=200),
     }
 
     global bus
@@ -784,32 +794,31 @@ def handle_table_row(row_):
 
 
 def get_db_connection():
-    """
-    Получить подключение к БД с автоматическим переподключением
-    при обрыве соединения
-    """
     global db_connection
     
-    try:
-        # Проверяем существует ли соединение и живо ли оно
-        if db_connection is not None:
-            # Пробуем выполнить простой запрос для проверки
+    if db_connection is not None:
+        try:
             cursor = db_connection.cursor()
             cursor.execute("SELECT 1")
             cursor.close()
             return db_connection
-    except Exception as e:
-        # Соединение мертвое, нужно пересоздать
-        logger.warning("Соединение с БД потеряно, переподключение... Ошибка: {}".format(str(e)))
-        db_connection = None
+        except:
+            try:
+                db_connection.close()
+            except:
+                pass
+            db_connection = None
     
-    # Создаем новое соединение
     try:
-        db_connection = pymssql.connect(**system_config.db_config.__dict__)
-        logger.info("Соединение с БД успешно установлено")
+        config_dict = system_config.db_config.__dict__.copy()
+        config_dict['timeout'] = 5
+        config_dict['login_timeout'] = 3
+        db_connection = pymssql.connect(**config_dict)
+        logger.info("БД подключена")
         return db_connection
     except Exception as e:
-        logger.error("Не удалось подключиться к БД: {}".format(str(e)))
+        logger.error("Ошибка БД: {}".format(str(e)))
+        db_connection = None
         raise
 
 
@@ -839,7 +848,7 @@ def get_active_cards():
     3. Максимум может быть 10 активных ключей (по одному на каждый тип)
     4. Затем фильтруем по датам активности (dstart <= now <= dend)
     """
-    global active_cards, count_keys, is_sold, prev_is_sold
+    global active_cards, count_keys, is_sold, prev_is_sold, db_connection
     
     try:
         cursor = get_db_connection().cursor()
@@ -1044,12 +1053,13 @@ def get_active_cards():
                     relay1_controller.clear_bit(4)  # Очистка бита 4 на реле 1
                 prev_is_sold = is_sold
         
+                prev_is_sold = is_sold
+        
     except Exception as e:
-        logger.error(f"Ошибка при получении активных карт: {str(e)}")
+        logger.error(f"Ошибка получения карт: {str(e)}")
+        db_connection = None
         
     return active_cards
-
-
 def log_key_usage(key_row, match_type):
     """Функция для подробного логирования использования ключа при открытии двери"""
     try:

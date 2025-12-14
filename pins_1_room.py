@@ -512,21 +512,39 @@ def rfid_thread_function():
 
 def turn_on(type = 1):
     global lighting_bl, lighting_br, lighting_main, gpio_locked
+    
     logger.info("Turn everything on")
-    gpio_locked = True
-    relay1_controller.clear_bit(5)
-    time.sleep(0.5)
-    relay2_controller.clear_bit(2)
-    time.sleep(0.3)
-    relay2_controller.clear_bit(1)
-    time.sleep(0.5)
-    gpio_locked = False
-    logger.info("Turn everything on - complete")
+    
+    try:
+        gpio_locked = True
+        time.sleep(0.2)
+        
+        relay1_controller.clear_bit(5)
+        time.sleep(0.2)
+        relay1_controller.clear_bit(5)
+        time.sleep(0.5)
+        relay2_controller.clear_bit(2)
+        time.sleep(0.2)
+        relay2_controller.clear_bit(2)
+        time.sleep(0.3)
+        relay2_controller.clear_bit(1)
+        time.sleep(0.2)
+        relay2_controller.clear_bit(1)
+        time.sleep(1.0)
+    except Exception as e:
+        logger.error("Ошибка включения реле: {}".format(str(e)))
+    finally:
+        gpio_locked = False
+        logger.info("Turn everything on - complete")
 
 
 # GPIO_22 callback картоприемник
 def f_card_key(self):
-    global active_key, is_sold
+    global active_key, is_sold, gpio_locked
+    
+    if gpio_locked:
+        return
+    
     card_logger.info("Сработал картоприемник")
     
     if active_key:
@@ -536,11 +554,14 @@ def f_card_key(self):
             
             if card_role:
                 logger.info(f"Включение устройств для роли: {card_role}")
+                gpio_locked = True
+                time.sleep(0.2)
                 turn_on()
             else:
                 logger.info("Роль карты не определена")
         except Exception as e:
             logger.error(f"Ошибка при обработке карты: {str(e)}")
+            gpio_locked = False
     # else:
     #     print("Выключение")
     #     turn_on(type=2)
@@ -1107,7 +1128,7 @@ def log_key_usage(key_row, match_type):
 
 # Обработчик ключа RFID - вызывается из RFIDHandler
 def handle_rfid_key(key):
-    global active_key
+    global active_key, gpio_locked
     if not key:
         logger.warning("Получен пустой ключ RFID")
         return
@@ -1326,10 +1347,6 @@ def main():
         check_pin_task.start()
         logger.info("Задача проверки пинов запущена")
         
-        # Проверка состояния картоприемника
-        logger.info(f"Запуск задачи проверки картоприемника (интервал: 4 сек)...")
-        cardreader_find()
-        
         # Инициализация неблокирующего обработчика RFID
         logger.info("Запуск потока чтения RFID...")
         rfid_thread = threading.Thread(target=rfid_thread_function)
@@ -1337,10 +1354,9 @@ def main():
         rfid_thread.start()
         logger.info("Поток чтения RFID запущен")
         
-        # Включаем устройства
-        logger.info("Включение устройств по умолчанию...")
+        # Включаем все устройства при старте системы
+        logger.info("Включение всех устройств при старте системы...")
         turn_on()
-        logger.info("Устройства включены")
         
         logger.info("=== СИСТЕМА ГОТОВА К РАБОТЕ ===")
         

@@ -556,7 +556,6 @@ def f_card_key(self):
                 logger.info(f"Включение устройств для роли: {card_role}")
                 gpio_locked = True
                 time.sleep(0.2)
-                turn_on()
             else:
                 logger.info("Роль карты не определена")
         except Exception as e:

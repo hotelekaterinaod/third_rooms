@@ -94,6 +94,8 @@ timer_thread = None
 off_timer_thread = None
 second_light_thread = None
 gpio_locked = False
+last_mass_trigger_time = None  # Время последнего массового срабатывания GPIO
+mass_trigger_active = False    # Флаг активного массового срабатывания
 
 db_connection = None
 
@@ -354,6 +356,45 @@ class ProgramKilled(Exception):
     pass
 
 
+def is_mass_gpio_trigger():
+    """
+    Проверяет, не является ли текущее событие частью массового срабатывания GPIO.
+    Массовое срабатывание = статический разряд от прикосновения человека.
+    Блокируем обработку событий на 1 секунду после обнаружения.
+    """
+    global last_mass_trigger_time, mass_trigger_active
+    
+    current_time = time.time()
+    
+    # Если уже активна блокировка массовых срабатываний
+    if mass_trigger_active:
+        if current_time - last_mass_trigger_time < 1.0:
+            # Ещё не прошла 1 секунда - продолжаем блокировать
+            return True
+        else:
+            # Прошла 1 секунда - снимаем блокировку
+            mass_trigger_active = False
+            logger.info("Защита от статики снята - события снова обрабатываются")
+            return False
+    
+    # Проверяем, не началось ли массовое срабатывание
+    if last_mass_trigger_time is None:
+        last_mass_trigger_time = current_time
+        return False
+    
+    # Если два события пришли слишком быстро (< 50ms) - это статика
+    time_diff = current_time - last_mass_trigger_time
+    last_mass_trigger_time = current_time
+    
+    if time_diff < 0.05:  # 50 миллисекунд
+        if not mass_trigger_active:
+            mass_trigger_active = True
+            logger.warning("⚡ ОБНАРУЖЕН СТАТИЧЕСКИЙ РАЗРЯД! Блокировка GPIO на 1 сек...")
+        return True
+    
+    return False
+
+
 def f_lock_door_from_inside(self):
     # logger.info(f"OFFF {bool(room_controller[23].state)}")
     logger.info("Lock door from inside")
@@ -394,7 +435,7 @@ def f_before_lock_door_from_inside(self):
 
 # GPIO_24 callback (проверка сработки "язычка" на открытие)
 def f_lock_latch(self):
-    if gpio_locked:
+    if gpio_locked or is_mass_gpio_trigger():
         return
     time.sleep(1)
     logger.info("Lock latch")
@@ -403,7 +444,7 @@ def f_lock_latch(self):
 
 # GPIO_18 callback (использование ключа)
 def f_using_key(self):
-    if gpio_locked:
+    if gpio_locked or is_mass_gpio_trigger():
         return
     logger.info("Use key")
 
@@ -511,7 +552,7 @@ def rfid_thread_function():
 
 
 def turn_on(type = 1):
-    global lighting_bl, lighting_br, lighting_main, gpio_locked
+    global lighting_bl, lighting_br, lighting_main, gpio_locked, room_controller
     
     logger.info("Turn everything on")
     
@@ -545,31 +586,14 @@ def f_card_key(self):
     if gpio_locked:
         return
     
-    card_logger.info("Сработал картоприемник")
-    
-    if active_key:
-        try:
-            card_role = get_card_role(active_key)
-            card_logger.info(f"Роль карты: {card_role}")
-            
-            if card_role:
-                logger.info(f"Включение устройств для роли: {card_role}")
-                gpio_locked = True
-                time.sleep(0.2)
-            else:
-                logger.info("Роль карты не определена")
-        except Exception as e:
-            logger.error(f"Ошибка при обработке карты: {str(e)}")
-            gpio_locked = False
-    # else:
-    #     print("Выключение")
-    #     turn_on(type=2)
+    card_logger.info("Сработал картоприемник (устройства уже включены при старте)")
+    # Никаких действий не выполняем - все устройства уже включены при старте системы
 
 
 
 # GPIO_27 callback цепь автоматов
 def f_circuit_breaker(self):
-    if gpio_locked:
+    if gpio_locked or is_mass_gpio_trigger():
         return
     logger.info("Curcuit breaker")
     pass
@@ -577,7 +601,7 @@ def f_circuit_breaker(self):
 
 # GPIO_17 callback контроль наличия питания R3 (освещения)
 def f_energy_sensor(self):
-    if gpio_locked:
+    if gpio_locked or is_mass_gpio_trigger():
         return
     logger.info("Energy sensor work")
 
